@@ -1,1 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Growth Manhunt</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #0d0d0d;
+        }
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
 
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const keys = {
+            w: false,
+            a: false,
+            s: false,
+            d: false
+        };
+
+        const player = {
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            radius: 20,
+            speed: 5,
+            barrelLength: 30,
+            barrelWidth: 10
+        };
+
+        function drawPlayer() {
+            // Draw the player's body
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Draw the barrel
+            ctx.fillStyle = '#cccccc';
+            ctx.fillRect(player.x, player.y - player.barrelWidth / 2, player.barrelLength, player.barrelWidth);
+        }
+
+        function updatePlayer() {
+            if (keys.w) player.y -= player.speed;
+            if (keys.s) player.y += player.speed;
+            if (keys.a) player.x -= player.speed;
+            if (keys.d) player.x += player.speed;
+        }
+
+        function gameLoop() {
+            // Clear the canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Update player position
+            updatePlayer();
+
+            // Draw player
+            drawPlayer();
+
+            // Loop
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Handle keyboard input
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'w') keys.w = true;
+            if (e.key === 'a') keys.a = true;
+            if (e.key === 's') keys.s = true;
+            if (e.key === 'd') keys.d = true;
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.key === 'w') keys.w = false;
+            if (e.key === 'a') keys.a = false;
+            if (e.key === 's') keys.s = false;
+            if (e.key === 'd') keys.d = false;
+        });
+
+        // Start the game
+        gameLoop();
+    </script>
+</body>
+</html>
