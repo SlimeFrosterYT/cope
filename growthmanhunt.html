@@ -37,12 +37,16 @@
             y: canvas.height / 2
         };
 
+        let isMouseDown = false;
+
         const player = {
             x: canvas.width / 2,
             y: canvas.height / 2,
             radius: 25,
-            speed: 5,
-            velocity: { x: 0, y: 0 }, // Added velocity object
+            maxSpeed: 5,
+            acceleration: 0.3,
+            friction: 0.95, // Applied to velocity each frame
+            velocity: { x: 0, y: 0 },
             barrelLength: 40,
             barrelWidth: 15
         };
@@ -103,13 +107,23 @@
         }
 
         function updatePlayer() {
-            // Update velocity based on key presses
-            player.velocity.x = 0;
-            player.velocity.y = 0;
-            if (keys.w) player.velocity.y = -player.speed;
-            if (keys.s) player.velocity.y = player.speed;
-            if (keys.a) player.velocity.x = -player.speed;
-            if (keys.d) player.velocity.x = player.speed;
+            // Apply acceleration based on key presses
+            if (keys.w) player.velocity.y -= player.acceleration;
+            if (keys.s) player.velocity.y += player.acceleration;
+            if (keys.a) player.velocity.x -= player.acceleration;
+            if (keys.d) player.velocity.x += player.acceleration;
+
+            // Apply friction to slow down the player
+            player.velocity.x *= player.friction;
+            player.velocity.y *= player.friction;
+
+            // Cap the player's speed
+            if (Math.abs(player.velocity.x) > player.maxSpeed) {
+                player.velocity.x = Math.sign(player.velocity.x) * player.maxSpeed;
+            }
+            if (Math.abs(player.velocity.y) > player.maxSpeed) {
+                player.velocity.y = Math.sign(player.velocity.y) * player.maxSpeed;
+            }
 
             // Update player position based on velocity
             player.x += player.velocity.x;
@@ -122,6 +136,17 @@
 
             // Update player position
             updatePlayer();
+
+            // Handle continuous shooting
+            const now = Date.now();
+            if (isMouseDown && now - lastShotTime > cooldown) {
+                lastShotTime = now;
+                const angle = Math.atan2(mouse.y - player.y, mouse.x - player.x);
+                // Position the bullet to come from the end of the barrel
+                const bulletStartX = player.x + Math.cos(angle) * (player.radius + player.barrelLength);
+                const bulletStartY = player.y + Math.sin(angle) * (player.radius + player.barrelLength);
+                bullets.push(new Bullet(bulletStartX, bulletStartY, angle));
+            }
 
             // Draw player
             drawPlayer();
@@ -147,14 +172,14 @@
             if (e.key === 'w') keys.w = true;
             if (e.key === 'a') keys.a = true;
             if (e.key === 's') keys.s = true;
-            if (e.key === 'd') keys.d = true; // Fixed typo
+            if (e.key === 'd') keys.d = true;
         });
 
         window.addEventListener('keyup', (e) => {
             if (e.key === 'w') keys.w = false;
             if (e.key === 'a') keys.a = false;
             if (e.key === 's') keys.s = false;
-            if (e.key === 'd') keys.d = false; // Fixed typo
+            if (e.key === 'd') keys.d = false;
         });
 
         // Handle mouse movement to track the cursor position
@@ -163,17 +188,13 @@
             mouse.y = e.clientY;
         });
 
-        // Handle mouse click to shoot
-        window.addEventListener('mousedown', (e) => {
-            const now = Date.now();
-            if (now - lastShotTime > cooldown) {
-                lastShotTime = now;
-                const angle = Math.atan2(mouse.y - player.y, mouse.x - player.x);
-                // Position the bullet to come from the end of the barrel
-                const bulletStartX = player.x + Math.cos(angle) * (player.radius + player.barrelLength);
-                const bulletStartY = player.y + Math.sin(angle) * (player.radius + player.barrelLength);
-                bullets.push(new Bullet(bulletStartX, bulletStartY, angle));
-            }
+        // Handle mouse click to shoot continuously
+        window.addEventListener('mousedown', () => {
+            isMouseDown = true;
+        });
+
+        window.addEventListener('mouseup', () => {
+            isMouseDown = false;
         });
 
         // Start the game
