@@ -40,15 +40,49 @@
         const player = {
             x: canvas.width / 2,
             y: canvas.height / 2,
-            radius: 25, // Player is a bit bigger
+            radius: 25,
             speed: 5,
-            barrelLength: 40, // Barrel is a bit bigger
-            barrelWidth: 12
+            barrelLength: 40,
+            barrelWidth: 15 // Barrel is a bit thicker
         };
 
+        const bullets = [];
+        let lastShotTime = 0;
+        const cooldown = 500; // 0.5 seconds in milliseconds
+
+        class Bullet {
+            constructor(x, y, angle) {
+                this.x = x;
+                this.y = y;
+                this.radius = 8;
+                this.speed = 10;
+                this.velocity = {
+                    x: Math.cos(angle) * this.speed,
+                    y: Math.sin(angle) * this.speed
+                };
+            }
+
+            draw() {
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            update() {
+                this.x += this.velocity.x;
+                this.y += this.velocity.y;
+            }
+        }
+
         function drawPlayer() {
-            // Calculate the angle for the barrel based on the cursor position
             const angle = Math.atan2(mouse.y - player.y, mouse.x - player.x);
+
+            // Draw the player's body
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+            ctx.fill();
 
             // Save the current canvas state before rotating
             ctx.save();
@@ -59,25 +93,19 @@
             // Rotate the canvas to the calculated angle
             ctx.rotate(angle);
 
-            // Draw the barrel, offset from the player's center
+            // Draw the barrel, offset a tiny bit from the player's center
             ctx.fillStyle = '#cccccc';
-            ctx.fillRect(player.radius, -player.barrelWidth / 2, player.barrelLength, player.barrelWidth);
+            ctx.fillRect(player.radius - 2, -player.barrelWidth / 2, player.barrelLength, player.barrelWidth);
             
             // Restore the canvas state to its original, non-rotated state
             ctx.restore();
-
-            // Draw the player's body
-            ctx.fillStyle = '#ffffff';
-            ctx.beginPath();
-            ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
-            ctx.fill();
         }
 
         function updatePlayer() {
             if (keys.w) player.y -= player.speed;
             if (keys.s) player.y += player.speed;
             if (keys.a) player.x -= player.speed;
-            if (keys.d) player.x += player.speed;
+            if (keys.d) player.d += player.speed;
         }
 
         function gameLoop() {
@@ -89,6 +117,18 @@
 
             // Draw player
             drawPlayer();
+
+            // Update and draw bullets
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const bullet = bullets[i];
+                bullet.update();
+                bullet.draw();
+
+                // Remove bullets that are off-screen
+                if (bullet.x < 0 || bullet.x > canvas.width || bullet.y < 0 || bullet.y > canvas.height) {
+                    bullets.splice(i, 1);
+                }
+            }
 
             // Loop
             requestAnimationFrame(gameLoop);
@@ -113,6 +153,19 @@
         window.addEventListener('mousemove', (e) => {
             mouse.x = e.clientX;
             mouse.y = e.clientY;
+        });
+
+        // Handle mouse click to shoot
+        window.addEventListener('mousedown', (e) => {
+            const now = Date.now();
+            if (now - lastShotTime > cooldown) {
+                lastShotTime = now;
+                const angle = Math.atan2(mouse.y - player.y, mouse.x - player.x);
+                // Position the bullet to come from the end of the barrel
+                const bulletStartX = player.x + Math.cos(angle) * (player.radius + player.barrelLength);
+                const bulletStartY = player.y + Math.sin(angle) * (player.radius + player.barrelLength);
+                bullets.push(new Bullet(bulletStartX, bulletStartY, angle));
+            }
         });
 
         // Start the game
