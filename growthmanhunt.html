@@ -32,25 +32,45 @@
             d: false
         };
 
+        const mouse = {
+            x: canvas.width / 2,
+            y: canvas.height / 2
+        };
+
         const player = {
             x: canvas.width / 2,
             y: canvas.height / 2,
-            radius: 20,
+            radius: 25, // Player is a bit bigger
             speed: 5,
-            barrelLength: 30,
-            barrelWidth: 10
+            barrelLength: 40, // Barrel is a bit bigger
+            barrelWidth: 12
         };
 
         function drawPlayer() {
+            // Calculate the angle for the barrel based on the cursor position
+            const angle = Math.atan2(mouse.y - player.y, mouse.x - player.x);
+
+            // Save the current canvas state before rotating
+            ctx.save();
+            
+            // Translate the canvas origin to the player's center
+            ctx.translate(player.x, player.y);
+            
+            // Rotate the canvas to the calculated angle
+            ctx.rotate(angle);
+
+            // Draw the barrel, offset from the player's center
+            ctx.fillStyle = '#cccccc';
+            ctx.fillRect(player.radius, -player.barrelWidth / 2, player.barrelLength, player.barrelWidth);
+            
+            // Restore the canvas state to its original, non-rotated state
+            ctx.restore();
+
             // Draw the player's body
             ctx.fillStyle = '#ffffff';
             ctx.beginPath();
             ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
             ctx.fill();
-            
-            // Draw the barrel
-            ctx.fillStyle = '#cccccc';
-            ctx.fillRect(player.x, player.y - player.barrelWidth / 2, player.barrelLength, player.barrelWidth);
         }
 
         function updatePlayer() {
@@ -87,6 +107,12 @@
             if (e.key === 'a') keys.a = false;
             if (e.key === 's') keys.s = false;
             if (e.key === 'd') keys.d = false;
+        });
+
+        // Handle mouse movement to track the cursor position
+        window.addEventListener('mousemove', (e) => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
         });
 
         // Start the game
