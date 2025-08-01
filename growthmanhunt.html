@@ -42,8 +42,9 @@
             y: canvas.height / 2,
             radius: 25,
             speed: 5,
+            velocity: { x: 0, y: 0 }, // Added velocity object
             barrelLength: 40,
-            barrelWidth: 15 // Barrel is a bit thicker
+            barrelWidth: 15
         };
 
         const bullets = [];
@@ -102,10 +103,17 @@
         }
 
         function updatePlayer() {
-            if (keys.w) player.y -= player.speed;
-            if (keys.s) player.y += player.speed;
-            if (keys.a) player.x -= player.speed;
-            if (keys.d) player.d += player.speed;
+            // Update velocity based on key presses
+            player.velocity.x = 0;
+            player.velocity.y = 0;
+            if (keys.w) player.velocity.y = -player.speed;
+            if (keys.s) player.velocity.y = player.speed;
+            if (keys.a) player.velocity.x = -player.speed;
+            if (keys.d) player.velocity.x = player.speed;
+
+            // Update player position based on velocity
+            player.x += player.velocity.x;
+            player.y += player.velocity.y;
         }
 
         function gameLoop() {
@@ -139,14 +147,14 @@
             if (e.key === 'w') keys.w = true;
             if (e.key === 'a') keys.a = true;
             if (e.key === 's') keys.s = true;
-            if (e.key === 'd') keys.d = true;
+            if (e.key === 'd') keys.d = true; // Fixed typo
         });
 
         window.addEventListener('keyup', (e) => {
             if (e.key === 'w') keys.w = false;
             if (e.key === 'a') keys.a = false;
             if (e.key === 's') keys.s = false;
-            if (e.key === 'd') keys.d = false;
+            if (e.key === 'd') keys.d = false; // Fixed typo
         });
 
         // Handle mouse movement to track the cursor position
