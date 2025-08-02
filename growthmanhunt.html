@@ -121,14 +121,24 @@
 
         const camera = { x: 0, y: 0 };
         let wall;
+        let mapSize;
         let myUsername;
         let currentDisplayedScore = 26263;
 
         const urlParams = new URLSearchParams(window.location.search);
         myUsername = urlParams.get('username') || `Player${Math.floor(Math.random() * 1000)}`;
 
+        function drawMapBoundary() {
+            if (!mapSize) return;
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(-camera.x, -camera.y, mapSize.width, mapSize.height);
+        }
+
         function drawWall() {
             if (!wall) return;
+            ctx.fillStyle = '#666666';
+            ctx.fillRect(wall.x - camera.x, wall.y - camera.y, wall.width, wall.height);
             ctx.strokeStyle = '#ffffff';
             ctx.lineWidth = 2;
             ctx.strokeRect(wall.x - camera.x, wall.y - camera.y, wall.width, wall.height);
@@ -215,35 +225,39 @@
         }
 
         function drawMinimap() {
-            if (!wall || !players[myId]) return;
+            if (!wall || !players[myId] || !mapSize) return;
 
             const mapWidth = minimapCanvas.width;
             const mapHeight = minimapCanvas.height;
-            const wallRatio = wall.width / wall.height;
+            const mapRatio = mapSize.width / mapSize.height;
             let minimapScale;
             let drawX, drawY;
 
-            if (wallRatio > 1) { // Wider than tall
-                minimapScale = mapWidth / wall.width;
+            if (mapRatio > 1) { // Wider than tall
+                minimapScale = mapWidth / mapSize.width;
                 drawX = 0;
-                drawY = (mapHeight - wall.height * minimapScale) / 2;
+                drawY = (mapHeight - mapSize.height * minimapScale) / 2;
             } else { // Taller than wide
-                minimapScale = mapHeight / wall.height;
-                drawX = (mapWidth - wall.width * minimapScale) / 2;
+                minimapScale = mapHeight / mapSize.height;
+                drawX = (mapWidth - mapSize.width * minimapScale) / 2;
                 drawY = 0;
             }
 
             minimapCtx.clearRect(0, 0, mapWidth, mapHeight);
             
-            // Draw wall boundary on minimap
+            // Draw map boundary on minimap
             minimapCtx.strokeStyle = 'white';
             minimapCtx.lineWidth = 1;
-            minimapCtx.strokeRect(drawX, drawY, wall.width * minimapScale, wall.height * minimapScale);
+            minimapCtx.strokeRect(drawX, drawY, mapSize.width * minimapScale, mapSize.height * minimapScale);
+
+            // Draw wall on minimap
+            minimapCtx.fillStyle = '#666666';
+            minimapCtx.fillRect(drawX + wall.x * minimapScale, drawY + wall.y * minimapScale, wall.width * minimapScale, wall.height * minimapScale);
 
             // Draw player on minimap
             const myPlayer = players[myId];
-            const minimapPlayerX = drawX + (myPlayer.x - wall.x) * minimapScale;
-            const minimapPlayerY = drawY + (myPlayer.y - wall.y) * minimapScale;
+            const minimapPlayerX = drawX + myPlayer.x * minimapScale;
+            const minimapPlayerY = drawY + myPlayer.y * minimapScale;
 
             minimapCtx.fillStyle = 'cyan';
             minimapCtx.beginPath();
@@ -270,6 +284,7 @@
             bullets = data.bullets;
             cubes = data.cubes;
             wall = data.wall;
+            mapSize = data.mapSize;
             currentDisplayedScore = players[myId] ? players[myId].score : 26263;
         });
 
@@ -349,7 +364,10 @@
                 }
                 scoreDisplay.textContent = `SCORE: ${Math.floor(currentDisplayedScore).toLocaleString()}`;
             }
-
+            
+            if (mapSize) {
+                drawMapBoundary();
+            }
             drawWall();
 
             for (const id in cubes) {
@@ -387,8 +405,8 @@
             if (chatIsFocused) return;
             if (e.key === 'w') keys.w = true;
             if (e.key === 'a') keys.a = true;
-            if (e.key === 's') keys.s = true;
-            if (e.key === 'd') keys.d = true;
+            if (e.key === 's') keys.s = false;
+            if (e.key === 'd') keys.d = false;
         });
 
         window.addEventListener('keyup', (e) => {
