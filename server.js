@@ -178,8 +178,6 @@ setInterval(() => {
                     const killer = players[bullet.ownerId];
 
                     if (player.hp <= 0) {
-                        io.emit('chatMessage', `${killer.username} killed ${player.username}!`);
-                        
                         // Increase killer's size
                         killer.radius += GROWTH_FACTOR;
                         killer.bulletRadius += GROWTH_FACTOR * 0.5;
