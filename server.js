@@ -16,6 +16,7 @@ const BULLET_KNOCKBACK_FORCE = 0.5;
 const CUBE_SIZE = 20;
 const MAX_CUBES = 10;
 const CUBE_SPAWN_INTERVAL = 5000;
+const PLAYER_COLLISION_DAMAGE = 0.1;
 
 const players = {};
 const bullets = {};
@@ -32,8 +33,8 @@ const wall = {
 
 // Function to check for collision between a rectangle and a circle
 function rectCircleColliding(circle, rect) {
-    const distX = Math.abs(circle.x - rect.x - rect.width / 2);
-    const distY = Math.abs(circle.y - rect.y - rect.height / 2);
+    const distX = Math.abs(circle.x - (rect.x + rect.width / 2));
+    const distY = Math.abs(circle.y - (rect.y + rect.height / 2));
 
     if (distX > (rect.width / 2 + circle.radius)) { return false; }
     if (distY > (rect.height / 2 + circle.radius)) { return false; }
@@ -62,8 +63,10 @@ function spawnCube() {
     let newCubePos = null;
 
     while (attempts < 100 && newCubePos === null) {
-        const x = Math.random() * (wall.width - CUBE_SIZE) + wall.x;
-        const y = Math.random() * (wall.height - CUBE_SIZE) + wall.y;
+        // Spawn cube randomly within the wall boundaries, with padding
+        const padding = 10;
+        const x = Math.random() * (wall.width - CUBE_SIZE - padding * 2) + wall.x + padding;
+        const y = Math.random() * (wall.height - CUBE_SIZE - padding * 2) + wall.y + padding;
         
         let collision = false;
         const tempCube = { x: x, y: y, size: CUBE_SIZE, width: CUBE_SIZE, height: CUBE_SIZE };
@@ -206,6 +209,27 @@ setInterval(() => {
     const now = Date.now();
     const bulletsToRemove = [];
 
+    // Player collision logic
+    const playerIds = Object.keys(players);
+    for (let i = 0; i < playerIds.length; i++) {
+        for (let j = i + 1; j < playerIds.length; j++) {
+            const player1 = players[playerIds[i]];
+            const player2 = players[playerIds[j]];
+            
+            if (!player1 || !player2) continue;
+
+            const dx = player1.x - player2.x;
+            const dy = player1.y - player2.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance < player1.radius + player2.radius) {
+                // Collision detected, apply damage
+                player1.hp -= PLAYER_COLLISION_DAMAGE;
+                player2.hp -= PLAYER_COLLISION_DAMAGE;
+            }
+        }
+    }
+
     for (const id in players) {
         const player = players[id];
         let newVelocityX = player.velocity.x;
@@ -222,24 +246,40 @@ setInterval(() => {
         if (Math.abs(newVelocityX) > player.maxSpeed) newVelocityX = Math.sign(newVelocityX) * player.maxSpeed;
         if (Math.abs(newVelocityY) > player.maxSpeed) newVelocityY = Math.sign(newVelocityY) * player.maxSpeed;
 
-        const nextX = player.x + newVelocityX;
-        const nextY = player.y + newVelocityY;
+        let nextX = player.x + newVelocityX;
+        let nextY = player.y + newVelocityY;
 
-        const closestX = Math.max(wall.x, Math.min(nextX, wall.x + wall.width));
-        const closestY = Math.max(wall.y, Math.min(nextY, wall.y + wall.height));
+        // Boundary collision logic
+        const minX = wall.x + player.radius;
+        const maxX = wall.x + wall.width - player.radius;
+        const minY = wall.y + player.radius;
+        const maxY = wall.y + wall.height - player.radius;
         
-        const distanceX = nextX - closestX;
-        const distanceY = nextY - closestY;
-        const distanceSquared = (distanceX * distanceX) + (distanceY * distanceY);
-        
-        if (distanceSquared >= (player.radius * player.radius)) {
-            player.x = nextX;
-            player.y = nextY;
-            player.velocity.x = newVelocityX;
-            player.velocity.y = newVelocityY;
-        } else {
-            player.velocity.x = 0;
-            player.velocity.y = 0;
+        if (nextX < minX) {
+            nextX = minX;
+            newVelocityX = 0;
+        } else if (nextX > maxX) {
+            nextX = maxX;
+            newVelocityX = 0;
+        }
+
+        if (nextY < minY) {
+            nextY = minY;
+            newVelocityY = 0;
+        } else if (nextY > maxY) {
+            nextY = maxY;
+            newVelocityY = 0;
+        }
+
+        player.x = nextX;
+        player.y = nextY;
+        player.velocity.x = newVelocityX;
+        player.velocity.y = newVelocityY;
+
+        // Check for player death after all damage is applied
+        if (player.hp <= 0) {
+            io.to(player.socketId).emit('kill');
+            delete players[id];
         }
     }
     io.emit('updatePlayers', players);
