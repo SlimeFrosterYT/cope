@@ -13,6 +13,7 @@ app.use(express.static(__dirname));
 const port = process.env.PORT || 3000;
 const FADE_DURATION = 1000;
 const BULLET_KNOCKBACK_FORCE = 0.5;
+const GROWTH_FACTOR = 1; // Amount to increase player/bullet size on a kill
 
 const players = {};
 const bullets = {};
@@ -35,11 +36,13 @@ io.on('connection', (socket) => {
         y: 500,
         color: '#ffffff',
         radius: 25,
+        bulletRadius: 10,
         barrelAngle: 0,
         velocity: { x: 0, y: 0 },
         acceleration: 0.25,
         friction: 0.85,
         maxSpeed: 4.5,
+        hp: 6,
         keys: { w: false, a: false, s: false, d: false }
     };
 
@@ -48,9 +51,11 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
         console.log('A user disconnected:', socket.id);
-        io.emit('chatMessage', `${players[socket.id].username} has left the game.`);
-        delete players[socket.id];
-        io.emit('playerDisconnected', socket.id);
+        if(players[socket.id]) {
+            io.emit('chatMessage', `${players[socket.id].username} has left the game.`);
+            delete players[socket.id];
+            io.emit('playerDisconnected', socket.id);
+        }
     });
 
     socket.on('setUsername', (username) => {
@@ -89,7 +94,7 @@ io.on('connection', (socket) => {
             x: data.x,
             y: data.y,
             velocity: data.velocity,
-            radius: 10,
+            radius: data.radius,
             isFading: false,
             fadeStartTime: 0
         };
@@ -146,7 +151,6 @@ setInterval(() => {
             bullet.x += bullet.velocity.x;
             bullet.y += bullet.velocity.y;
 
-            // Check for bullet-wall collision
             const closestX = Math.max(wall.x, Math.min(bullet.x, wall.x + wall.width));
             const closestY = Math.max(wall.y, Math.min(bullet.y, wall.y + wall.height));
             const distToWallX = bullet.x - closestX;
@@ -160,20 +164,38 @@ setInterval(() => {
                 bullet.velocity.y = 0;
             }
 
-            // Check for bullet-player collision
             for (const playerId in players) {
                 const player = players[playerId];
                 const distToPlayerX = bullet.x - player.x;
                 const distToPlayerY = bullet.y - player.y;
                 const distSquaredToPlayer = (distToPlayerX * distToPlayerX) + (distToPlayerY * distToPlayerY);
 
-                if (distSquaredToPlayer < (player.radius * player.radius)) {
-                    // Apply knockback to the player
+                if (distSquaredToPlayer < (player.radius * player.radius) && bullet.ownerId !== player.id) {
+                    player.hp--;
+
                     const angle = Math.atan2(distToPlayerY, distToPlayerX);
                     player.velocity.x += Math.cos(angle) * BULLET_KNOCKBACK_FORCE;
                     player.velocity.y += Math.sin(angle) * BULLET_KNOCKBACK_FORCE;
 
-                    // Fade the bullet
+                    const killer = players[bullet.ownerId];
+
+                    if (player.hp <= 0) {
+                        io.emit('chatMessage', `${killer.username} killed ${player.username}!`);
+                        
+                        // Increase killer's size
+                        killer.radius += GROWTH_FACTOR;
+                        killer.bulletRadius += GROWTH_FACTOR * 0.5;
+
+                        // Emit 'kill' event to the dead client to trigger redirection
+                        io.to(player.id).emit('kill');
+                        
+                        delete players[playerId];
+                        io.emit('playerDisconnected', playerId);
+
+                    } else {
+                        io.emit('chatMessage', `${player.username} was hit! HP: ${player.hp}`);
+                    }
+
                     bullet.isFading = true;
                     bullet.fadeStartTime = now;
                     bullet.velocity.x = 0;
