@@ -19,9 +19,12 @@ const MAX_CUBES = 10;
 const MAX_PENTAGONS = 3;
 const CUBE_SPAWN_INTERVAL = 5000;
 const PENTAGON_SPAWN_INTERVAL = 8000;
-const PLAYER_COLLISION_DAMAGE = 0.1;
-const MAX_HP = 6;
-const HP_REGEN_RATE = 0.005;
+const PLAYER_COLLISION_DAMAGE = 1; // Updated damage for new HP system
+const MAX_HP = 100; // Updated max HP
+const HP_REGEN_RATE = 0.25; // Updated regen rate for new HP system
+const BULLET_DAMAGE = 10; // New bullet damage value
+const CUBE_SCORE = 5;
+const PENTAGON_SCORE = 20;
 
 // Define the larger map size as a square
 const mapSize = {
@@ -40,7 +43,7 @@ const wall = {
 const players = {};
 const bullets = {};
 const cubes = {};
-const pentagons = {}; // New object for pentagons
+const pentagons = {};
 let bulletCounter = 0;
 let cubeCounter = 0;
 let pentagonCounter = 0;
@@ -77,7 +80,6 @@ function spawnCube() {
     let newCubePos = null;
 
     while (attempts < 100 && newCubePos === null) {
-        // Spawn cube randomly within the map boundaries, with padding
         const padding = 10;
         const x = Math.random() * (mapSize.width - CUBE_SIZE - padding * 2) + padding;
         const y = Math.random() * (mapSize.height - CUBE_SIZE - padding * 2) + padding;
@@ -85,7 +87,6 @@ function spawnCube() {
         let collision = false;
         const tempCube = { x: x, y: y, size: CUBE_SIZE, width: CUBE_SIZE, height: CUBE_SIZE };
 
-        // Check for collision with existing cubes
         for (const cubeId in cubes) {
             if (rectRectColliding(tempCube, cubes[cubeId])) {
                 collision = true;
@@ -98,7 +99,6 @@ function spawnCube() {
             continue;
         }
 
-        // Check for collision with players
         for (const playerId in players) {
             const player = players[playerId];
             const playerCircle = { x: player.x, y: player.y, radius: player.radius };
@@ -115,13 +115,12 @@ function spawnCube() {
     }
 
     if (newCubePos) {
-        const score = 5; // Fixed strength of 5 for yellow cubes
         cubes[cubeCounter] = {
             id: cubeCounter,
             x: newCubePos.x,
             y: newCubePos.y,
             size: CUBE_SIZE,
-            score: score,
+            score: CUBE_SCORE,
             width: CUBE_SIZE,
             height: CUBE_SIZE
         };
@@ -143,7 +142,6 @@ function spawnPentagon() {
         let collision = false;
         const tempPentagon = { x: x, y: y, size: PENTAGON_SIZE, width: PENTAGON_SIZE, height: PENTAGON_SIZE };
 
-        // Check for collision with existing pentagons
         for (const pentagonId in pentagons) {
             if (rectRectColliding(tempPentagon, pentagons[pentagonId])) {
                 collision = true;
@@ -156,7 +154,6 @@ function spawnPentagon() {
             continue;
         }
 
-        // Check for collision with players
         for (const playerId in players) {
             const player = players[playerId];
             const playerCircle = { x: player.x, y: player.y, radius: player.radius };
@@ -173,15 +170,15 @@ function spawnPentagon() {
     }
 
     if (newPentagonPos) {
-        const score = 20; // Fixed strength of 20 for purple pentagons
         pentagons[pentagonCounter] = {
             id: pentagonCounter,
             x: newPentagonPos.x,
             y: newPentagonPos.y,
             size: PENTAGON_SIZE,
-            score: score,
+            score: PENTAGON_SCORE,
             width: PENTAGON_SIZE,
-            height: PENTAGON_SIZE
+            height: PENTAGON_SIZE,
+            hp: PENTAGON_SCORE // Pentagons have health equal to their score
         };
         pentagonCounter++;
     }
@@ -199,13 +196,6 @@ function getPlayerSpawnPosition(playerRadius) {
         const x = Math.random() * (mapSize.width - playerRadius * 2) + playerRadius;
         const y = Math.random() * (mapSize.height - playerRadius * 2) + playerRadius;
 
-        const playerBounds = {
-            x: x - playerRadius,
-            y: y - playerRadius,
-            width: playerRadius * 2,
-            height: playerRadius * 2
-        };
-
         spawnPosition = { x, y };
         attempts++;
     }
@@ -217,7 +207,6 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
         console.log('A user disconnected:', socket.id);
-        // Find the player by socket ID and delete them
         for (const playerId in players) {
             if (players[playerId].socketId === socket.id) {
                 delete players[playerId];
@@ -227,7 +216,6 @@ io.on('connection', (socket) => {
     });
 
     socket.on('setUsername', (username) => {
-        // Find if a player with this username already exists
         let existingPlayerId = null;
         for (const playerId in players) {
             if (players[playerId].username === username) {
@@ -236,7 +224,6 @@ io.on('connection', (socket) => {
             }
         }
         
-        // If an old player with this username exists, delete them
         if (existingPlayerId) {
             delete players[existingPlayerId];
         }
@@ -244,7 +231,6 @@ io.on('connection', (socket) => {
         const playerRadius = 25;
         const spawnPos = getPlayerSpawnPosition(playerRadius) || { x: mapSize.width / 4, y: mapSize.height / 4 };
 
-        // Create the new player with the new socket ID
         players[socket.id] = {
             socketId: socket.id,
             username: username,
@@ -259,7 +245,7 @@ io.on('connection', (socket) => {
             friction: 0.85,
             maxSpeed: 4.5,
             hp: MAX_HP,
-            score: 26263,
+            score: 0, // Reset score on new player
             keys: { w: false, a: false, s: false, d: false }
         };
 
@@ -321,7 +307,6 @@ setInterval(() => {
             const distance = Math.sqrt(dx * dx + dy * dy);
 
             if (distance < player1.radius + player2.radius) {
-                // Collision detected, apply damage
                 player1.hp -= PLAYER_COLLISION_DAMAGE;
                 player2.hp -= PLAYER_COLLISION_DAMAGE;
             }
@@ -330,6 +315,8 @@ setInterval(() => {
 
     for (const id in players) {
         const player = players[id];
+        if (!player) continue;
+
         let newVelocityX = player.velocity.x;
         let newVelocityY = player.velocity.y;
 
@@ -347,19 +334,16 @@ setInterval(() => {
         let nextX = player.x + newVelocityX;
         let nextY = player.y + newVelocityY;
 
-        // Boundary collision fix: clamp player position but don't reset velocity
         player.x = Math.max(player.radius, Math.min(nextX, mapSize.width - player.radius));
         player.y = Math.max(player.radius, Math.min(nextY, mapSize.height - player.radius));
 
         player.velocity.x = newVelocityX;
         player.velocity.y = newVelocityY;
 
-        // HP Regeneration
         if (player.hp < MAX_HP) {
             player.hp = Math.min(player.hp + HP_REGEN_RATE, MAX_HP);
         }
 
-        // Check for player death after all damage is applied
         if (player.hp <= 0) {
             io.to(player.socketId).emit('kill');
             delete players[id];
@@ -369,6 +353,7 @@ setInterval(() => {
 
     for (const bulletId in bullets) {
         const bullet = bullets[bulletId];
+        if (!bullet) continue;
 
         if (!bullet.isFading) {
             bullet.x += bullet.velocity.x;
@@ -390,7 +375,7 @@ setInterval(() => {
                 const distSquaredToPlayer = (distToPlayerX * distToPlayerX) + (distToPlayerY * distToPlayerY);
 
                 if (distSquaredToPlayer < (player.radius * player.radius) && bullet.ownerId !== player.socketId) {
-                    player.hp--;
+                    player.hp -= BULLET_DAMAGE;
 
                     const angle = Math.atan2(distToPlayerY, distToPlayerX);
                     player.velocity.x += Math.cos(angle) * BULLET_KNOCKBACK_FORCE;
@@ -415,7 +400,7 @@ setInterval(() => {
                 }
             }
 
-            // Bullet-Cube collision
+            // Bullet-Cube collision (Cubes are still one-hit)
             for (const cubeId in cubes) {
                 const cube = cubes[cubeId];
                 const closestX = Math.max(cube.x, Math.min(bullet.x, cube.x + cube.size));
@@ -436,7 +421,7 @@ setInterval(() => {
                 }
             }
             
-            // New Bullet-Pentagon collision
+            // New Bullet-Pentagon collision (Pentagons have health)
             for (const pentagonId in pentagons) {
                 const pentagon = pentagons[pentagonId];
                 const closestX = Math.max(pentagon.x, Math.min(bullet.x, pentagon.x + pentagon.size));
@@ -447,12 +432,17 @@ setInterval(() => {
                 const distSquaredToPentagon = (distToPentagonX * distToPentagonX) + (distToPentagonY * distToPentagonY);
                 
                 if (distSquaredToPentagon < (bullet.radius * bullet.radius)) {
-                    const killer = players[bullet.ownerId];
-                    if (killer) {
-                        killer.score += pentagon.score;
-                    }
+                    pentagon.hp -= BULLET_DAMAGE;
                     
-                    delete pentagons[pentagonId];
+                    if (pentagon.hp <= 0) {
+                        const killer = players[bullet.ownerId];
+                        if (killer) {
+                            killer.score += pentagon.score;
+                        }
+                        
+                        delete pentagons[pentagonId];
+                    }
+
                     bulletsToRemove.push(bulletId);
                 }
             }
