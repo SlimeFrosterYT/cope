@@ -88,7 +88,6 @@
         let wall;
         let myUsername;
 
-        // Get username from URL
         const urlParams = new URLSearchParams(window.location.search);
         myUsername = urlParams.get('username') || `Player${Math.floor(Math.random() * 1000)}`;
 
@@ -129,14 +128,27 @@
             ctx.rotate(angle);
 
             ctx.fillStyle = '#cccccc';
-            ctx.fillRect(playerToDraw.radius - 2, -20 / 2, 20, 20);
+            ctx.fillRect(playerToDraw.radius - 2, -playerToDraw.radius / 2, playerToDraw.radius * 2, playerToDraw.radius / 2);
             ctx.restore();
 
             // Draw username
             ctx.fillStyle = 'white';
             ctx.textAlign = 'center';
             ctx.font = '12px sans-serif';
-            ctx.fillText(playerToDraw.username, screenX, screenY - playerToDraw.radius - 10);
+            ctx.fillText(playerToDraw.username, screenX, screenY - playerToDraw.radius - 20);
+
+            // Draw HP bar
+            const barWidth = 40;
+            const barHeight = 5;
+            const hpPercentage = playerToDraw.hp / 6; 
+            const hpBarX = screenX - barWidth / 2;
+            const hpBarY = screenY - playerToDraw.radius - 10;
+
+            ctx.fillStyle = 'red';
+            ctx.fillRect(hpBarX, hpBarY, barWidth, barHeight);
+            
+            ctx.fillStyle = 'green';
+            ctx.fillRect(hpBarX, hpBarY, barWidth * hpPercentage, barHeight);
         }
 
         function drawBullet(bullet) {
@@ -166,7 +178,6 @@
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
-        // --- Socket.io Listeners ---
         socket.on('connect', () => {
             console.log('Connected to server with ID:', socket.id);
             socket.emit('setUsername', myUsername);
@@ -208,7 +219,11 @@
             addMessageToChat(message);
         });
 
-        // --- Main Game Loop ---
+        // Listen for the "kill" event and redirect the user
+        socket.on('kill', () => {
+            window.location.href = 'index.html';
+        });
+
         function gameLoop() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -235,7 +250,8 @@
                         velocity: {
                             x: Math.cos(angle) * 10,
                             y: Math.sin(angle) * 10
-                        }
+                        },
+                        radius: myPlayer.bulletRadius
                     });
                 }
             }
@@ -253,7 +269,6 @@
             requestAnimationFrame(gameLoop);
         }
 
-        // --- Event Listeners ---
         window.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 if (chatIsFocused) {
