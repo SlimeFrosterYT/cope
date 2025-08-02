@@ -57,6 +57,17 @@
             outline: none;
         }
 
+        #score-display {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 1.5em;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 5px 10px;
+            border-radius: 5px;
+        }
+
     </style>
 
 </head>
@@ -68,6 +79,8 @@
     <div class="chat-container">
         <input type="text" class="chat-input" placeholder="Press Enter to chat..." id="chatInput">
     </div>
+
+    <div id="score-display">Score: 0</div>
 
 
     <script src="/socket.io/socket.io.js"></script>
@@ -81,6 +94,7 @@
         const socket = io();
 
         const chatInput = document.getElementById('chatInput');
+        const scoreDisplay = document.getElementById('score-display');
 
 
         let playerId = null;
@@ -98,6 +112,9 @@
         let wall = {};
 
         let mapSize = {};
+
+        let BARREL_LENGTH;
+        let BARREL_WIDTH;
 
 
         const keys = { w: false, a: false, s: false, d: false };
@@ -155,6 +172,9 @@
 
             mapSize = data.mapSize;
 
+            BARREL_LENGTH = data.BARREL_LENGTH;
+            BARREL_WIDTH = data.BARREL_WIDTH;
+
 
             if (players[playerId]) {
 
@@ -170,6 +190,9 @@
         socket.on('updatePlayers', (serverPlayers) => {
 
             players = serverPlayers;
+            if (players[playerId]) {
+                scoreDisplay.textContent = `Score: ${players[playerId].score}`;
+            }
 
         });
 
@@ -286,6 +309,14 @@
 
         });
 
+        function drawBarrel(player) {
+            ctx.save();
+            ctx.translate(player.x - camera.x, player.y - camera.y);
+            ctx.rotate(player.barrelAngle);
+            ctx.fillStyle = player.color;
+            ctx.fillRect(player.radius - 5, -BARREL_WIDTH / 2, BARREL_LENGTH, BARREL_WIDTH);
+            ctx.restore();
+        }
 
         function drawPlayer(player) {
             // Draw player circle
@@ -295,6 +326,9 @@
             ctx.fill();
             ctx.closePath();
             
+            // Draw player barrel
+            drawBarrel(player);
+
             // Draw player name
             ctx.fillStyle = 'white';
             ctx.font = '12px sans-serif';
@@ -360,69 +394,61 @@
 
 
         function drawPentagon(pentagon) {
-
             ctx.fillStyle = '#800080';
-
             ctx.beginPath();
-
             const sides = 5;
-
             const size = pentagon.size / 2;
-
-            ctx.moveTo(pentagon.x - camera.x + size * Math.cos(0), pentagon.y - camera.y + size * Math.sin(0));
-
-            for (let i = 1; i <= sides; i++) {
-
-                ctx.lineTo(pentagon.x - camera.x + size * Math.cos(i * 2 * Math.PI / sides), pentagon.y - camera.y + size * Math.sin(i * 2 * Math.PI / sides));
-
+            for (let i = 0; i < sides; i++) {
+                const angle = i * 2 * Math.PI / sides;
+                const x = pentagon.x - camera.x + size * Math.cos(angle) + pentagon.size / 2;
+                const y = pentagon.y - camera.y + size * Math.sin(angle) + pentagon.size / 2;
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
             }
-
-            ctx.fill();
-
             ctx.closePath();
-
+            ctx.fill();
         }
 
-
         function drawTriangle(triangle) {
-
             ctx.fillStyle = '#ff4d4d';
-
             ctx.beginPath();
-
             const sides = 3;
-
             const size = triangle.size / 2;
-
-            ctx.moveTo(triangle.x - camera.x + size * Math.cos(0), triangle.y - camera.y + size * Math.sin(0));
-
-            for (let i = 1; i <= sides; i++) {
-
-                ctx.lineTo(triangle.x - camera.x + size * Math.cos(i * 2 * Math.PI / sides), triangle.y - camera.y + size * Math.sin(i * 2 * Math.PI / sides));
-
+            for (let i = 0; i < sides; i++) {
+                const angle = i * 2 * Math.PI / sides;
+                const x = triangle.x - camera.x + size * Math.cos(angle) + triangle.size / 2;
+                const y = triangle.y - camera.y + size * Math.sin(angle) + triangle.size / 2;
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
             }
-
-            ctx.fill();
-
             ctx.closePath();
-
+            ctx.fill();
         }
 
 
         function drawMap() {
-
+            // Outer boundary
             ctx.strokeStyle = '#555';
-
             ctx.lineWidth = 5;
-
             ctx.beginPath();
-
             ctx.rect(0 - camera.x, 0 - camera.y, mapSize.width, mapSize.height);
-
             ctx.stroke();
-
             ctx.closePath();
+        }
 
+        function drawWall() {
+            // Inner wall (pentagon spawn zone)
+            ctx.fillStyle = 'rgba(128, 0, 128, 0.2)'; // Semi-transparent purple
+            ctx.beginPath();
+            ctx.rect(wall.x - camera.x, wall.y - camera.y, wall.width, wall.height);
+            ctx.fill();
+            ctx.closePath();
         }
 
 
@@ -445,6 +471,7 @@
 
 
             drawMap();
+            drawWall();
 
             Object.values(cubes).forEach(drawCube);
 
