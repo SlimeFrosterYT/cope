@@ -116,6 +116,7 @@
         let playersLastState = {};
         let bullets = {};
         let cubes = {};
+        let pentagons = {}; // New object for pentagons
         let lastUpdateTime = Date.now();
         let chatIsFocused = false;
 
@@ -130,6 +131,7 @@
 
         function drawMapBoundary() {
             if (!mapSize) return;
+            // The map is a 2000x2000 square. The viewport is rectangular.
             ctx.strokeStyle = '#ffffff';
             ctx.lineWidth = 2;
             ctx.strokeRect(-camera.x, -camera.y, mapSize.width, mapSize.height);
@@ -137,7 +139,7 @@
 
         function drawWall() {
             if (!wall) return;
-            // Draw the purple wall, without a white border and no collision
+            // Draw the purple square. It no longer has a border and is not an obstacle.
             ctx.fillStyle = '#800080'; 
             ctx.fillRect(wall.x - camera.x, wall.y - camera.y, wall.width, wall.height);
         }
@@ -167,7 +169,7 @@
             ctx.arc(screenX, screenY, playerToDraw.radius, 0, Math.PI * 2);
             ctx.fill();
 
-            // Draw the barrel (original style)
+            // Draw the barrel
             ctx.save();
             ctx.translate(screenX, screenY);
             ctx.rotate(angle);
@@ -224,6 +226,29 @@
             ctx.fillRect(cube.x - camera.x, cube.y - camera.y, cube.size, cube.size);
         }
 
+        function drawPentagon(pentagon) {
+            const screenX = pentagon.x - camera.x;
+            const screenY = pentagon.y - camera.y;
+            const radius = pentagon.size / 2;
+
+            ctx.fillStyle = '#800080'; // A dark purple color
+            ctx.beginPath();
+            
+            // Draw a pentagon shape
+            for (let i = 0; i < 5; i++) {
+                const angle = (Math.PI / 2) + (i * 2 * Math.PI / 5);
+                const x = screenX + radius * Math.cos(angle);
+                const y = screenY + radius * Math.sin(angle);
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            ctx.closePath();
+            ctx.fill();
+        }
+
         function drawMinimap() {
             if (!wall || !players[myId] || !mapSize) return;
 
@@ -250,7 +275,7 @@
             minimapCtx.lineWidth = 1;
             minimapCtx.strokeRect(drawX, drawY, mapSize.width * minimapScale, mapSize.height * minimapScale);
 
-            // Draw wall on minimap
+            // Draw the central purple square on minimap
             minimapCtx.fillStyle = '#800080';
             minimapCtx.fillRect(drawX + wall.x * minimapScale, drawY + wall.y * minimapScale, wall.width * minimapScale, wall.height * minimapScale);
 
@@ -283,6 +308,7 @@
             playersLastState = JSON.parse(JSON.stringify(data.players));
             bullets = data.bullets;
             cubes = data.cubes;
+            pentagons = data.pentagons; // Initialize pentagons
             wall = data.wall;
             mapSize = data.mapSize;
             currentDisplayedScore = players[myId] ? players[myId].score : 26263;
@@ -314,6 +340,10 @@
 
         socket.on('updateCubes', (serverCubes) => {
             cubes = serverCubes;
+        });
+        
+        socket.on('updatePentagons', (serverPentagons) => {
+            pentagons = serverPentagons;
         });
 
         socket.on('chatMessage', (message) => {
@@ -373,6 +403,10 @@
             for (const id in cubes) {
                 drawCube(cubes[id]);
             }
+            
+            for (const id in pentagons) {
+                drawPentagon(pentagons[id]);
+            }
 
             for (const id in players) {
                 drawPlayer(players[id]);
@@ -403,7 +437,6 @@
                 }
             }
             if (chatIsFocused) return;
-            // FIX: Correctly set key states
             if (e.key === 'w') keys.w = true;
             if (e.key === 'a') keys.a = true;
             if (e.key === 's') keys.s = true;
