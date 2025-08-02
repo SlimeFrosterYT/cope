@@ -13,8 +13,9 @@ app.use(express.static(__dirname));
 const port = process.env.PORT || 3000;
 const FADE_DURATION = 1000;
 const BULLET_KNOCKBACK_FORCE = 0.5;
-const CUBE_SCORE = 10;
 const CUBE_SIZE = 20;
+const MAX_CUBES = 10;
+const CUBE_SPAWN_INTERVAL = 5000;
 
 const players = {};
 const bullets = {};
@@ -29,21 +30,89 @@ const wall = {
     height: 200,
 };
 
-// Function to spawn a new cube
-function spawnCube() {
-    const x = Math.random() * (wall.width - CUBE_SIZE) + wall.x;
-    const y = Math.random() * (wall.height - CUBE_SIZE) + wall.y;
-    cubes[cubeCounter] = {
-        id: cubeCounter,
-        x: x,
-        y: y,
-        size: CUBE_SIZE
-    };
-    cubeCounter++;
+// Function to check for collision between a rectangle and a circle
+function rectCircleColliding(circle, rect) {
+    const distX = Math.abs(circle.x - rect.x - rect.width / 2);
+    const distY = Math.abs(circle.y - rect.y - rect.height / 2);
+
+    if (distX > (rect.width / 2 + circle.radius)) { return false; }
+    if (distY > (rect.height / 2 + circle.radius)) { return false; }
+
+    if (distX <= (rect.width / 2)) { return true; } 
+    if (distY <= (rect.height / 2)) { return true; }
+
+    const dx = distX - rect.width / 2;
+    const dy = distY - rect.height / 2;
+    return (dx * dx + dy * dy <= (circle.radius * circle.radius));
 }
 
-// Spawn a new cube every 5 seconds
-setInterval(spawnCube, 5000);
+// Function to check for collision between two rectangles
+function rectRectColliding(rect1, rect2) {
+    return rect1.x < rect2.x + rect2.width &&
+           rect1.x + rect1.width > rect2.x &&
+           rect1.y < rect2.y + rect2.height &&
+           rect1.y + rect1.height > rect2.y;
+}
+
+// Function to spawn a new cube at a valid location
+function spawnCube() {
+    if (Object.keys(cubes).length >= MAX_CUBES) return;
+
+    let attempts = 0;
+    let newCubePos = null;
+
+    while (attempts < 100 && newCubePos === null) {
+        const x = Math.random() * (wall.width - CUBE_SIZE) + wall.x;
+        const y = Math.random() * (wall.height - CUBE_SIZE) + wall.y;
+        
+        let collision = false;
+        const tempCube = { x: x, y: y, size: CUBE_SIZE, width: CUBE_SIZE, height: CUBE_SIZE };
+
+        // Check for collision with existing cubes
+        for (const cubeId in cubes) {
+            if (rectRectColliding(tempCube, cubes[cubeId])) {
+                collision = true;
+                break;
+            }
+        }
+
+        if (collision) {
+            attempts++;
+            continue;
+        }
+
+        // Check for collision with players
+        for (const playerId in players) {
+            const player = players[playerId];
+            const playerCircle = { x: player.x, y: player.y, radius: player.radius };
+            if (rectCircleColliding(playerCircle, tempCube)) {
+                collision = true;
+                break;
+            }
+        }
+
+        if (!collision) {
+            newCubePos = { x, y };
+        }
+        attempts++;
+    }
+
+    if (newCubePos) {
+        const score = Math.floor(Math.random() * (15 - 5 + 1)) + 5;
+        cubes[cubeCounter] = {
+            id: cubeCounter,
+            x: newCubePos.x,
+            y: newCubePos.y,
+            size: CUBE_SIZE,
+            score: score,
+            width: CUBE_SIZE,
+            height: CUBE_SIZE
+        };
+        cubeCounter++;
+    }
+}
+
+setInterval(spawnCube, CUBE_SPAWN_INTERVAL);
 
 io.on('connection', (socket) => {
     console.log('A user connected:', socket.id);
@@ -215,14 +284,11 @@ setInterval(() => {
                     if (player.hp <= 0) {
                         if (killer) {
                             killer.score += player.score;
-                            // No chat message for kills as per user request
                         }
                         
-                        // Emit 'kill' event to the dead client to trigger redirection
                         io.to(player.socketId).emit('kill');
                         
                         delete players[playerId];
-                        // Do not broadcast playerDisconnected messages
                     }
 
                     bullet.isFading = true;
@@ -245,7 +311,7 @@ setInterval(() => {
                 if (distSquaredToCube < (bullet.radius * bullet.radius)) {
                     const killer = players[bullet.ownerId];
                     if (killer) {
-                        killer.score += CUBE_SCORE;
+                        killer.score += cube.score;
                     }
                     
                     delete cubes[cubeId];
