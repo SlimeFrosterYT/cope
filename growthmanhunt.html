@@ -45,7 +45,9 @@
         const socket = io("https://copemai.onrender.com");
         let myId;
         let players = {};
+        let playersLastState = {};
         let bullets = {};
+        let lastUpdateTime = Date.now();
 
         const camera = { x: 0, y: 0 };
         const wall = {
@@ -70,19 +72,24 @@
         socket.on('init', (data) => {
             myId = data.playerId;
             players = data.players;
-            bullets = data.bullets;
+            playersLastState = JSON.parse(JSON.stringify(data.players));
         });
 
         socket.on('playerConnected', (newPlayer) => {
             players[newPlayer.id] = newPlayer;
+            playersLastState[newPlayer.id] = newPlayer;
         });
 
         socket.on('updatePlayers', (serverPlayers) => {
+            // Store the current player state to interpolate from
+            playersLastState = JSON.parse(JSON.stringify(players));
             players = serverPlayers;
+            lastUpdateTime = Date.now();
         });
 
         socket.on('playerDisconnected', (playerId) => {
             delete players[playerId];
+            delete playersLastState[playerId];
         });
 
         socket.on('newBullet', (bulletData) => {
@@ -94,13 +101,29 @@
         });
 
         function drawPlayer(player) {
-            const angle = player.barrelAngle;
-            const screenX = player.x - camera.x;
-            const screenY = player.y - camera.y;
+            let playerToDraw = player;
+            if (player.id !== myId && playersLastState[player.id]) {
+                const now = Date.now();
+                const latency = now - lastUpdateTime;
+                const interpolationFactor = Math.min(1, latency / 100); // Interpolate over 100ms
 
-            ctx.fillStyle = player.color;
+                const lastPos = playersLastState[player.id];
+                const currentPos = player;
+
+                // Interpolate between the last known position and the new one
+                const interpolatedX = lastPos.x + (currentPos.x - lastPos.x) * interpolationFactor;
+                const interpolatedY = lastPos.y + (currentPos.y - lastPos.y) * interpolationFactor;
+
+                playerToDraw = { ...player, x: interpolatedX, y: interpolatedY };
+            }
+            
+            const angle = playerToDraw.barrelAngle;
+            const screenX = playerToDraw.x - camera.x;
+            const screenY = playerToDraw.y - camera.y;
+
+            ctx.fillStyle = playerToDraw.color;
             ctx.beginPath();
-            ctx.arc(screenX, screenY, player.radius, 0, Math.PI * 2);
+            ctx.arc(screenX, screenY, playerToDraw.radius, 0, Math.PI * 2);
             ctx.fill();
 
             ctx.save();
@@ -108,7 +131,7 @@
             ctx.rotate(angle);
 
             ctx.fillStyle = '#cccccc';
-            ctx.fillRect(player.radius - 2, -20 / 2, 20, 20);
+            ctx.fillRect(playerToDraw.radius - 2, -20 / 2, 20, 20);
             ctx.restore();
         }
 
@@ -183,7 +206,7 @@
             if (e.key === 'w') keys.w = true;
             if (e.key === 'a') keys.a = true;
             if (e.key === 's') keys.s = true;
-            if (e.key === 'd') keys.d = false;
+            if (e.key === 'd') keys.d = true; // FIX: Corrected typo
         });
 
         window.addEventListener('keyup', (e) => {
