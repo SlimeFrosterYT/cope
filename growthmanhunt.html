@@ -235,6 +235,7 @@
             const screenX = pentagon.x - camera.x;
             const screenY = pentagon.y - camera.y;
             const radius = pentagon.size / 2;
+            const maxHp = pentagon.score;
 
             // Draw a darker purple pentagon
             ctx.fillStyle = '#4B0082'; 
@@ -253,6 +254,23 @@
             }
             ctx.closePath();
             ctx.fill();
+
+            // Draw HP bar if pentagon is damaged
+            if (pentagon.hp < maxHp) {
+                const barWidth = pentagon.size;
+                const barHeight = 4;
+                const hpPercentage = pentagon.hp / maxHp; 
+                const hpBarX = screenX - barWidth / 2;
+                const hpBarY = screenY - radius - 10;
+
+                // Background of HP bar
+                ctx.fillStyle = 'red';
+                ctx.fillRect(hpBarX, hpBarY, barWidth, barHeight);
+                
+                // Current HP
+                ctx.fillStyle = 'green';
+                ctx.fillRect(hpBarX, hpBarY, barWidth * hpPercentage, barHeight);
+            }
         }
 
         function drawMinimap() {
