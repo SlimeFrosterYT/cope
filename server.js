@@ -13,7 +13,6 @@ app.use(express.static(__dirname));
 const port = process.env.PORT || 3000;
 const FADE_DURATION = 1000;
 const BULLET_KNOCKBACK_FORCE = 0.5;
-const GROWTH_FACTOR = 1; // Amount to increase player/bullet size on a kill
 
 const players = {};
 const bullets = {};
@@ -26,6 +25,14 @@ const wall = {
     height: 200,
 };
 
+function resetPlayer(player) {
+    player.x = 500;
+    player.y = 500;
+    player.hp = 6;
+    player.velocity = { x: 0, y: 0 };
+    player.keys = { w: false, a: false, s: false, d: false };
+}
+
 io.on('connection', (socket) => {
     console.log('A user connected:', socket.id);
 
@@ -36,7 +43,6 @@ io.on('connection', (socket) => {
         y: 500,
         color: '#ffffff',
         radius: 25,
-        bulletRadius: 10,
         barrelAngle: 0,
         velocity: { x: 0, y: 0 },
         acceleration: 0.25,
@@ -51,17 +57,13 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
         console.log('A user disconnected:', socket.id);
-        if(players[socket.id]) {
-            io.emit('chatMessage', `${players[socket.id].username} has left the game.`);
-            delete players[socket.id];
-            io.emit('playerDisconnected', socket.id);
-        }
+        delete players[socket.id];
+        io.emit('playerDisconnected', socket.id);
     });
 
     socket.on('setUsername', (username) => {
         if (players[socket.id]) {
             players[socket.id].username = username;
-            io.emit('chatMessage', `${username} has joined the game.`);
         }
     });
 
@@ -94,7 +96,7 @@ io.on('connection', (socket) => {
             x: data.x,
             y: data.y,
             velocity: data.velocity,
-            radius: data.radius,
+            radius: 10,
             isFading: false,
             fadeStartTime: 0
         };
@@ -177,23 +179,11 @@ setInterval(() => {
                     player.velocity.x += Math.cos(angle) * BULLET_KNOCKBACK_FORCE;
                     player.velocity.y += Math.sin(angle) * BULLET_KNOCKBACK_FORCE;
 
-                    const killer = players[bullet.ownerId];
+                    io.emit('chatMessage', `${player.username} was hit! HP: ${player.hp}`);
 
                     if (player.hp <= 0) {
-                        io.emit('chatMessage', `${killer.username} killed ${player.username}!`);
-                        
-                        // Increase killer's size
-                        killer.radius += GROWTH_FACTOR;
-                        killer.bulletRadius += GROWTH_FACTOR * 0.5;
-
-                        // Emit 'kill' event to the dead client to trigger redirection
-                        io.to(player.id).emit('kill');
-                        
-                        delete players[playerId];
-                        io.emit('playerDisconnected', playerId);
-
-                    } else {
-                        io.emit('chatMessage', `${player.username} was hit! HP: ${player.hp}`);
+                        io.emit('chatMessage', `${player.username} has died and will respawn!`);
+                        resetPlayer(player);
                     }
 
                     bullet.isFading = true;
