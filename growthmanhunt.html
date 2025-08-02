@@ -1,649 +1,596 @@
-// server.js
+<!DOCTYPE html>
 
-const express = require('express');
-const http = require('http');
-const path = require('path');
-const socketio = require('socket.io');
+<html lang="en">
 
-const app = express();
-const server = http.createServer(app);
-const io = socketio(server);
+<head>
 
-app.use(express.static(__dirname));
+    <meta charset="UTF-8">
 
-const port = process.env.PORT || 3000;
-const FADE_DURATION = 1000;
-const BULLET_KNOCKBACK_FORCE = 0.5;
-const CUBE_SIZE = 20;
-const TRIANGLE_SIZE = 40;
-const PENTAGON_SIZE = 50;
-const MAX_CUBES = 10;
-const MAX_PENTAGONS = 3;
-const MAX_TRIANGLES = 5;
-const CUBE_SPAWN_INTERVAL = 5000;
-const PENTAGON_SPAWN_INTERVAL = 8000;
-const TRIANGLE_SPAWN_INTERVAL = 6000;
-const PLAYER_COLLISION_DAMAGE = 1;
-const MAX_HP = 100;
-const HP_REGEN_DELAY = 20000;
-const HP_REGEN_RATE = 0.05;
-const CUBE_SCORE = 5;
-const PENTAGON_SCORE = 20;
-const TRIANGLE_SCORE = 15;
-const PLAYER_SHOOT_COOLDOWN = 200; // in milliseconds
-const BULLET_STRENGTH = 10;
-const BULLET_SPEED = 10;
-const BULLET_RADIUS = 10;
-const CHAT_MESSAGE_LIFETIME = 5000; // 5 seconds for chat messages
-const BARREL_LENGTH = 30;
-const BARREL_WIDTH = 10;
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-// Define the larger map size as a square
-const mapSize = {
-    width: 4000,
-    height: 4000
-};
+    <title>Growth Manhunt</title>
 
-// Define the central wall (now a special spawn zone)
-const wall = {
-    x: mapSize.width / 2 - 400,
-    y: mapSize.height / 2 - 400,
-    width: 800,
-    height: 800,
-};
+    <style>
 
-const players = {};
-const bullets = {};
-const cubes = {};
-const pentagons = {};
-const triangles = {};
-let bulletCounter = 0;
-let cubeCounter = 0;
-let pentagonCounter = 0;
-let triangleCounter = 0;
+        body {
 
-// Function to check for collision between a rectangle and a circle
-function rectCircleColliding(circle, rect) {
-    const distX = Math.abs(circle.x - (rect.x + rect.width / 2));
-    const distY = Math.abs(circle.y - (rect.y + rect.height / 2));
+            margin: 0;
 
-    if (distX > (rect.width / 2 + circle.radius)) { return false; }
-    if (distY > (rect.height / 2 + circle.radius)) { return false; }
+            overflow: hidden;
 
-    if (distX <= (rect.width / 2)) { return true; }
-    if (distY <= (rect.height / 2)) { return true; }
+            background-color: #010409;
 
-    const dx = distX - rect.width / 2;
-    const dy = distY - rect.height / 2;
-    return (dx * dx + dy * dy <= (circle.radius * circle.radius));
-}
+            font-family: sans-serif;
 
-// Function to check for collision between two rectangles
-function rectRectColliding(rect1, rect2) {
-    return rect1.x < rect2.x + rect2.width &&
-           rect1.x + rect1.width > rect2.x &&
-           rect1.y < rect2.y + rect2.height &&
-           rect1.y + rect1.height > rect2.y;
-}
+            color: white;
 
-// Function to spawn a new yellow cube at a valid location
-function spawnCube() {
-    if (Object.keys(cubes).length >= MAX_CUBES) return;
+        }
 
-    let attempts = 0;
-    let newCubePos = null;
+        canvas {
 
-    while (attempts < 100 && newCubePos === null) {
-        const padding = 10;
-        const x = Math.random() * (mapSize.width - CUBE_SIZE - padding * 2) + padding;
-        const y = Math.random() * (mapSize.height - CUBE_SIZE - padding * 2) + padding;
-        
-        let collision = false;
-        const tempCube = { x: x, y: y, size: CUBE_SIZE, width: CUBE_SIZE, height: CUBE_SIZE };
+            display: block;
 
-        for (const cubeId in cubes) {
-            if (rectRectColliding(tempCube, cubes[cubeId])) {
-                collision = true;
-                break;
-            }
+            width: 100vw;
+
+            height: 100vh;
+
         }
         
-        if (collision) {
-            attempts++;
-            continue;
+        #start-screen {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+            z-index: 10;
         }
 
-        // Check collision with wall
-        if (rectRectColliding(tempCube, wall)) {
-            collision = true;
-        }
-        if(collision) {
-            attempts++;
-            continue;
+        #start-screen h1 {
+            font-size: 2.5em;
+            margin-bottom: 20px;
         }
 
-        for (const playerId in players) {
-            const player = players[playerId];
-            const playerCircle = { x: player.x, y: player.y, radius: player.radius };
-            if (rectCircleColliding(playerCircle, tempCube)) {
-                collision = true;
-                break;
-            }
+        #username-input {
+            padding: 10px;
+            border: 1px solid #555;
+            background-color: #333;
+            color: white;
+            border-radius: 5px;
+            font-size: 1em;
+            margin-bottom: 15px;
+            width: 200px;
+        }
+        
+        #play-button {
+            padding: 10px 20px;
+            font-size: 1.2em;
+            border: none;
+            background-color: #007BFF;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
         }
 
-        if (!collision) {
-            newCubePos = { x, y };
+        #play-button:hover {
+            background-color: #0056b3;
         }
-        attempts++;
-    }
 
-    if (newCubePos) {
-        cubes[cubeCounter] = {
-            id: cubeCounter,
-            x: newCubePos.x,
-            y: newCubePos.y,
-            size: CUBE_SIZE,
-            strength: 5,
-            score: CUBE_SCORE,
-            width: CUBE_SIZE,
-            height: CUBE_SIZE
-        };
-        cubeCounter++;
-    }
-}
+        #game-container {
+            display: none;
+        }
 
-// Function to spawn a new purple pentagon inside the central square
-function spawnPentagon() {
-    if (Object.keys(pentagons).length >= MAX_PENTAGONS) return;
+        .chat-container {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            width: 300px;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+        }
+        
+        .chat-input {
+            width: 100%;
+            background: none;
+            border: 1px solid #555;
+            color: white;
+            padding: 5px;
+            box-sizing: border-box;
+            outline: none;
+        }
+
+        #score-display {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 1.5em;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 5px 10px;
+            border-radius: 5px;
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+    <div id="start-screen">
+        <h1>Growth Manhunt</h1>
+        <input type="text" id="username-input" placeholder="Enter your username">
+        <button id="play-button">Play</button>
+    </div>
+
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
     
-    let attempts = 0;
-    let newPentagonPos = null;
+        <div class="chat-container">
+            <input type="text" class="chat-input" placeholder="Press Enter to chat..." id="chatInput">
+        </div>
 
-    while (attempts < 100 && newPentagonPos === null) {
-        const x = wall.x + Math.random() * (wall.width - PENTAGON_SIZE);
-        const y = wall.y + Math.random() * (wall.height - PENTAGON_SIZE);
+        <div id="score-display">Score: 0</div>
+    </div>
 
-        let collision = false;
-        const tempPentagon = { x: x, y: y, size: PENTAGON_SIZE, width: PENTAGON_SIZE, height: PENTAGON_SIZE };
+    <script src="/socket.io/socket.io.js"></script>
 
-        for (const pentagonId in pentagons) {
-            if (rectRectColliding(tempPentagon, pentagons[pentagonId])) {
-                collision = true;
-                break;
-            }
-        }
+    <script>
+
+        const canvas = document.getElementById('gameCanvas');
+
+        const ctx = canvas.getContext('2d');
+
+        const socket = io();
+
+        const chatInput = document.getElementById('chatInput');
+        const scoreDisplay = document.getElementById('score-display');
+        const startScreen = document.getElementById('start-screen');
+        const gameContainer = document.getElementById('game-container');
+        const usernameInput = document.getElementById('username-input');
+        const playButton = document.getElementById('play-button');
+
+
+        let playerId = null;
+
+        let players = {};
+
+        let bullets = {};
+
+        let cubes = {};
+
+        let pentagons = {};
+
+        let triangles = {};
+
+        let wall = {};
+
+        let mapSize = {};
+
+        let BARREL_LENGTH;
+        let BARREL_WIDTH;
+
+
+        const keys = { w: false, a: false, s: false, d: false };
+
+        let mouse = { x: 0, y: 0 };
+
+        let playerBarrelAngle = 0;
+
+        let shooting = false;
+
+        let lastShotTime = 0; // Local shooting cooldown
+
+        const shootCooldown = 200; // Match server-side cooldown
+
+
+        let camera = { x: 0, y: 0 };
+
         
-        if (collision) {
-            attempts++;
-            continue;
-        }
+        window.addEventListener('resize', () => {
 
-        for (const playerId in players) {
-            const player = players[playerId];
-            const playerCircle = { x: player.x, y: player.y, radius: player.radius };
-            if (rectCircleColliding(playerCircle, tempPentagon)) {
-                collision = true;
-                break;
-            }
-        }
+            canvas.width = window.innerWidth;
 
-        if (!collision) {
-            newPentagonPos = { x, y };
-        }
-        attempts++;
-    }
+            canvas.height = window.innerHeight;
 
-    if (newPentagonPos) {
-        pentagons[pentagonCounter] = {
-            id: pentagonCounter,
-            x: newPentagonPos.x,
-            y: newPentagonPos.y,
-            size: PENTAGON_SIZE,
-            strength: 50,
-            score: PENTAGON_SCORE,
-            width: PENTAGON_SIZE,
-            height: PENTAGON_SIZE,
-            hp: 50
-        };
-        pentagonCounter++;
-    }
-}
+            if (playerId && players[playerId]) {
 
-// Function to spawn a new red triangle
-function spawnTriangle() {
-    if (Object.keys(triangles).length >= MAX_TRIANGLES) return;
-
-    let attempts = 0;
-    let newTrianglePos = null;
-
-    while (attempts < 100 && newTrianglePos === null) {
-        const padding = 10;
-        const x = Math.random() * (mapSize.width - TRIANGLE_SIZE - padding * 2) + padding;
-        const y = Math.random() * (mapSize.height - TRIANGLE_SIZE - padding * 2) + padding;
-        
-        let collision = false;
-        const tempTriangle = { x: x, y: y, size: TRIANGLE_SIZE, width: TRIANGLE_SIZE, height: TRIANGLE_SIZE };
-
-        for (const triangleId in triangles) {
-            if (rectRectColliding(tempTriangle, triangles[triangleId])) {
-                collision = true;
-                break;
-            }
-        }
-        
-        if (collision) {
-            attempts++;
-            continue;
-        }
-
-        // Check collision with wall
-        if (rectRectColliding(tempTriangle, wall)) {
-            collision = true;
-        }
-        if(collision) {
-            attempts++;
-            continue;
-        }
-
-        for (const playerId in players) {
-            const player = players[playerId];
-            const playerCircle = { x: player.x, y: player.y, radius: player.radius };
-            if (rectCircleColliding(playerCircle, tempTriangle)) {
-                collision = true;
-                break;
-            }
-        }
-
-        if (!collision) {
-            newTrianglePos = { x, y };
-        }
-        attempts++;
-    }
-
-    if (newTrianglePos) {
-        triangles[triangleCounter] = {
-            id: triangleCounter,
-            x: newTrianglePos.x,
-            y: newTrianglePos.y,
-            size: TRIANGLE_SIZE,
-            strength: 15,
-            score: TRIANGLE_SCORE,
-            width: TRIANGLE_SIZE,
-            height: TRIANGLE_SIZE,
-            hp: 15
-        };
-        triangleCounter++;
-    }
-}
-
-setInterval(spawnCube, CUBE_SPAWN_INTERVAL);
-setInterval(spawnPentagon, PENTAGON_SPAWN_INTERVAL);
-setInterval(spawnTriangle, TRIANGLE_SPAWN_INTERVAL);
-
-// Function to get a valid player spawn position
-function getPlayerSpawnPosition(playerRadius) {
-    let attempts = 0;
-    let spawnPosition = null;
-
-    while (attempts < 100 && spawnPosition === null) {
-        const x = Math.random() * (mapSize.width - playerRadius * 2) + playerRadius;
-        const y = Math.random() * (mapSize.height - playerRadius * 2) + playerRadius;
-        
-        // Check collision with wall
-        const tempPlayerCircle = { x: x, y: y, radius: playerRadius };
-        const playerRect = { x: tempPlayer.x - tempPlayer.radius, y: tempPlayer.y - tempPlayer.radius, width: tempPlayer.radius * 2, height: tempPlayer.radius * 2 };
-        if (rectRectColliding(playerRect, wall)) {
-            attempts++;
-            continue;
-        }
-
-        spawnPosition = { x, y };
-        attempts++;
-    }
-    return spawnPosition;
-}
-
-io.on('connection', (socket) => {
-    console.log('A user connected:', socket.id);
-
-    socket.on('disconnect', () => {
-        console.log('A user disconnected:', socket.id);
-        delete players[socket.id];
-    });
-
-    socket.on('setUsername', (username) => {
-        const finalUsername = username ? username : "Unnamed";
-
-        const playerRadius = 25;
-        const spawnPos = getPlayerSpawnPosition(playerRadius) || { x: mapSize.width / 4, y: mapSize.height / 4 };
-
-        players[socket.id] = {
-            socketId: socket.id,
-            username: finalUsername,
-            x: spawnPos.x,
-            y: spawnPos.y,
-            color: '#ffffff',
-            radius: playerRadius,
-            bulletRadius: BULLET_RADIUS,
-            barrelAngle: 0,
-            velocity: { x: 0, y: 0 },
-            acceleration: 0.25,
-            friction: 0.85,
-            maxSpeed: 4.5,
-            hp: MAX_HP,
-            score: 0,
-            keys: { w: false, a: false, s: false, d: false },
-            lastDamageTime: 0,
-            lastShotTime: 0,
-            chatMessages: [] // New array to store chat messages
-        };
-
-        socket.emit('init', { playerId: socket.id, players, bullets, cubes, pentagons, triangles, wall, mapSize, BARREL_LENGTH, BARREL_WIDTH });
-    });
-
-    socket.on('playerInput', (keys) => {
-        const player = players[socket.id];
-        if (player) {
-            player.keys = keys;
-        }
-    });
-
-    socket.on('playerAim', (data) => {
-        const player = players[socket.id];
-        if (player) {
-            player.barrelAngle = data.barrelAngle;
-        }
-    });
-
-    socket.on('chatMessage', (message) => {
-        const player = players[socket.id];
-        if (player) {
-            player.chatMessages.push({
-                text: message,
-                timestamp: Date.now()
-            });
-        }
-    });
-
-    socket.on('playerShoot', () => {
-        const player = players[socket.id];
-        const now = Date.now();
-
-        if (player && (now - player.lastShotTime > PLAYER_SHOOT_COOLDOWN)) {
-            player.lastShotTime = now;
-            
-            // The server calculates the bullet spawn position, not the client
-            const spawnDistance = player.radius + player.bulletRadius + 5;
-            const bulletSpawnX = player.x + Math.cos(player.barrelAngle) * spawnDistance;
-            const bulletSpawnY = player.y + Math.sin(player.barrelAngle) * spawnDistance;
-
-            const newBulletId = bulletCounter++;
-            bullets[newBulletId] = {
-                id: newBulletId,
-                ownerId: socket.id,
-                x: bulletSpawnX,
-                y: bulletSpawnY,
-                velocity: {
-                    x: Math.cos(player.barrelAngle) * BULLET_SPEED,
-                    y: Math.sin(player.barrelAngle) * BULLET_SPEED
-                },
-                radius: BULLET_RADIUS,
-                isFading: false,
-                fadeStartTime: 0,
-                strength: BULLET_STRENGTH
-            };
-        }
-    });
-});
-
-setInterval(() => {
-    const now = Date.now();
-    const bulletsToRemove = new Set();
-
-    // Player collision logic
-    const playerIds = Object.keys(players);
-    for (let i = 0; i < playerIds.length; i++) {
-        for (let j = i + 1; j < playerIds.length; j++) {
-            const player1 = players[playerIds[i]];
-            const player2 = players[playerIds[j]];
-            
-            if (!player1 || !player2) continue;
-
-            const dx = player1.x - player2.x;
-            const dy = player1.y - player2.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-
-            if (distance < player1.radius + player2.radius) {
-                player1.hp -= PLAYER_COLLISION_DAMAGE;
-                player1.lastDamageTime = now;
-                player2.hp -= PLAYER_COLLISION_DAMAGE;
-                player2.lastDamageTime = now;
-            }
-        }
-    }
-
-    for (const id in players) {
-        const player = players[id];
-        if (!player) continue;
-
-        let newVelocityX = player.velocity.x;
-        let newVelocityY = player.velocity.y;
-
-        if (player.keys.w) newVelocityY -= player.acceleration;
-        if (player.keys.s) newVelocityY += player.acceleration;
-        if (player.keys.a) newVelocityX -= player.acceleration;
-        if (player.keys.d) newVelocityX += player.acceleration;
-
-        newVelocityX *= player.friction;
-        newVelocityY *= player.friction;
-
-        if (Math.abs(newVelocityX) > player.maxSpeed) newVelocityX = Math.sign(newVelocityX) * player.maxSpeed;
-        if (Math.abs(newVelocityY) > player.maxSpeed) newVelocityY = Math.sign(newVelocityY) * player.maxSpeed;
-
-        let nextX = player.x + newVelocityX;
-        let nextY = player.y + newVelocityY;
-
-        // Prevent player from entering the wall
-        const tempPlayer = { x: nextX, y: nextY, radius: player.radius };
-        const playerRect = { x: tempPlayer.x - tempPlayer.radius, y: tempPlayer.y - tempPlayer.radius, width: tempPlayer.radius * 2, height: tempPlayer.radius * 2 };
-        if (rectRectColliding(playerRect, wall)) {
-            // Player is colliding with the wall, so stop movement
-            // Find which side they hit and adjust
-            const overlapX = Math.min(playerRect.x + playerRect.width - wall.x, wall.x + wall.width - playerRect.x);
-            const overlapY = Math.min(playerRect.y + playerRect.height - wall.y, wall.y + wall.height - playerRect.y);
-            
-            if (overlapX < overlapY) {
-                if (playerRect.x < wall.x) { // hit from left
-                    nextX = wall.x - player.radius;
-                } else { // hit from right
-                    nextX = wall.x + wall.width + player.radius;
-                }
-            } else {
-                if (playerRect.y < wall.y) { // hit from top
-                    nextY = wall.y - player.radius;
-                } else { // hit from bottom
-                    nextY = wall.y + wall.height + player.radius;
-                }
-            }
-        }
-
-        player.x = Math.max(player.radius, Math.min(nextX, mapSize.width - player.radius));
-        player.y = Math.max(player.radius, Math.min(nextY, mapSize.height - player.radius));
-
-        player.velocity.x = newVelocityX;
-        player.velocity.y = newVelocityY;
-
-        // New HP Regeneration logic
-        if (player.hp < MAX_HP && (now - player.lastDamageTime > HP_REGEN_DELAY)) {
-            player.hp = Math.min(player.hp + HP_REGEN_RATE, MAX_HP);
-        }
-
-        // Remove old chat messages
-        player.chatMessages = player.chatMessages.filter(msg => now - msg.timestamp < CHAT_MESSAGE_LIFETIME);
-
-        if (player.hp <= 0) {
-            io.to(player.socketId).emit('kill');
-            delete players[id];
-        }
-    }
-    io.emit('updatePlayers', players);
-
-    for (const bulletId in bullets) {
-        const bullet = bullets[bulletId];
-        if (!bullet) continue;
-        if (bulletsToRemove.has(bulletId)) continue;
-
-        if (!bullet.isFading) {
-            bullet.x += bullet.velocity.x;
-            bullet.y += bullet.velocity.y;
-
-            // Bullet-Map Boundary collision
-            if (bullet.x < 0 || bullet.x > mapSize.width || bullet.y < 0 || bullet.y > mapSize.height) {
-                bullet.isFading = true;
-                bullet.fadeStartTime = now;
-                bullet.velocity.x = 0;
-                bullet.velocity.y = 0;
-            }
-
-            // Bullet-Wall collision
-            const bulletRect = { x: bullet.x - bullet.radius, y: bullet.y - bullet.radius, width: bullet.radius * 2, height: bullet.radius * 2 };
-            if (rectRectColliding(bulletRect, wall)) {
-                bullet.isFading = true;
-                bullet.fadeStartTime = now;
-                bullet.velocity.x = 0;
-                bullet.velocity.y = 0;
-            }
-
-            // Bullet-Player collision
-            for (const playerId in players) {
                 const player = players[playerId];
-                if (bullet.ownerId === player.socketId) continue;
-                
-                const distToPlayerX = bullet.x - player.x;
-                const distToPlayerY = bullet.y - player.y;
-                const distSquaredToPlayer = (distToPlayerX * distToPlayerX) + (distToPlayerY * distToPlayerY);
 
-                if (distSquaredToPlayer < (player.radius * player.radius)) {
-                    player.hp -= bullet.strength;
-                    player.lastDamageTime = now;
+                camera.x = player.x - canvas.width / 2;
 
-                    const angle = Math.atan2(distToPlayerY, distToPlayerX);
-                    player.velocity.x += Math.cos(angle) * BULLET_KNOCKBACK_FORCE;
-                    player.velocity.y += Math.sin(angle) * BULLET_KNOCKBACK_FORCE;
+                camera.y = player.y - canvas.height / 2;
 
-                    const killer = players[bullet.ownerId];
-
-                    if (player.hp <= 0) {
-                        if (killer) {
-                            killer.score += player.score;
-                        }
-                        
-                        io.to(player.socketId).emit('kill');
-                        
-                        delete players[playerId];
-                    }
-
-                    bulletsToRemove.add(bulletId);
-                }
             }
 
-            // Bullet-Cube collision
-            for (const cubeId in cubes) {
-                const cube = cubes[cubeId];
-                const closestX = Math.max(cube.x, Math.min(bullet.x, cube.x + cube.size));
-                const closestY = Math.max(cube.y, Math.min(bullet.y, cube.y + cube.size));
-                
-                const distToCubeX = bullet.x - closestX;
-                const distToCubeY = bullet.y - closestY;
-                const distSquaredToCube = (distToCubeX * distToCubeX) + (distToCubeY * distToCubeY);
-                
-                if (distSquaredToCube < (bullet.radius * bullet.radius)) {
-                    // Reduce bullet strength
-                    bullet.strength -= cube.strength;
+        });
 
-                    const killer = players[bullet.ownerId];
-                    if (killer) {
-                        killer.score += cube.score;
-                    }
-                    
-                    delete cubes[cubeId];
-                
-                    if (bullet.strength <= 0) {
-                        bulletsToRemove.add(bulletId);
-                    }
-                }
+        playButton.addEventListener('click', () => {
+            const username = usernameInput.value.trim() || 'Unnamed';
+            socket.emit('setUsername', username);
+            startScreen.style.display = 'none';
+            gameContainer.style.display = 'block';
+            window.dispatchEvent(new Event('resize'));
+            animate();
+        });
+
+
+        socket.on('init', (data) => {
+
+            playerId = data.playerId;
+
+            players = data.players;
+
+            bullets = data.bullets;
+
+            cubes = data.cubes;
+
+            pentagons = data.pentagons;
+
+            triangles = data.triangles;
+
+            wall = data.wall;
+
+            mapSize = data.mapSize;
+
+            BARREL_LENGTH = data.BARREL_LENGTH;
+            BARREL_WIDTH = data.BARREL_WIDTH;
+
+
+            if (players[playerId]) {
+
+                camera.x = players[playerId].x - canvas.width / 2;
+
+                camera.y = players[playerId].y - canvas.height / 2;
+
             }
+
+        });
+
+
+        socket.on('updatePlayers', (serverPlayers) => {
+
+            players = serverPlayers;
+            if (players[playerId]) {
+                scoreDisplay.textContent = `Score: ${Math.floor(players[playerId].score)}`;
+            }
+
+        });
+
+
+        socket.on('updateBullets', (serverBullets) => {
+
+            bullets = serverBullets;
+
+        });
+
+
+        socket.on('updateCubes', (serverCubes) => {
+
+            cubes = serverCubes;
+
+        });
+
+
+        socket.on('updatePentagons', (serverPentagons) => {
+
+            pentagons = serverPentagons;
+
+        });
+
+
+        socket.on('updateTriangles', (serverTriangles) => {
+
+            triangles = serverTriangles;
+
+        });
+
+        
+        socket.on('kill', () => {
+
+            // Redirect to index.html on kill
+            window.location.reload();
+
+        });
+
+
+        document.addEventListener('keydown', (e) => {
+            if (chatInput.matches(':focus')) {
+                // If chat is focused, don't move the player
+                if (e.key === 'Enter') {
+                    const message = chatInput.value.trim();
+                    if (message) {
+                        socket.emit('chatMessage', message);
+                        chatInput.value = '';
+                    }
+                    chatInput.blur();
+                }
+                return;
+            }
+
+            if (e.key === 'w') keys.w = true;
+
+            if (e.key === 'a') keys.a = true;
+
+            if (e.key === 's') keys.s = true;
+
+            if (e.key === 'd') keys.d = true;
+
+            if (e.key === 't') {
+                e.preventDefault();
+                chatInput.focus();
+            }
+
+        });
+
+
+        document.addEventListener('keyup', (e) => {
+            if (chatInput.matches(':focus')) {
+                return;
+            }
+
+            if (e.key === 'w') keys.w = false;
+
+            if (e.key === 'a') keys.a = false;
+
+            if (e.key === 's') keys.s = false;
+
+            if (e.key === 'd') keys.d = false;
+
+        });
+
+
+        canvas.addEventListener('mousemove', (e) => {
+
+            mouse.x = e.clientX;
+
+            mouse.y = e.clientY;
+
+        });
+
+
+        canvas.addEventListener('mousedown', (e) => {
+
+            if (e.button === 0) {
+
+                shooting = true;
+
+            }
+
+        });
+
+
+        canvas.addEventListener('mouseup', (e) => {
+
+            if (e.button === 0) {
+
+                shooting = false;
+
+            }
+
+        });
+
+        function drawBarrel(player) {
+            ctx.save();
+            ctx.translate(player.x - camera.x, player.y - camera.y);
+            ctx.rotate(player.barrelAngle);
+            ctx.fillStyle = player.color;
+            ctx.fillRect(player.radius - 5, -BARREL_WIDTH / 2, BARREL_LENGTH, BARREL_WIDTH);
+            ctx.restore();
+        }
+
+        function drawPlayer(player) {
+            // Draw player circle
+            ctx.fillStyle = player.color;
+            ctx.beginPath();
+            ctx.arc(player.x - camera.x, player.y - camera.y, player.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.closePath();
             
-            // Bullet-Pentagon collision
-            for (const pentagonId in pentagons) {
-                const pentagon = pentagons[pentagonId];
-                const closestX = Math.max(pentagon.x, Math.min(bullet.x, pentagon.x + pentagon.size));
-                const closestY = Math.max(pentagon.y, Math.min(bullet.y, pentagon.y + pentagon.size));
-                
-                const distToPentagonX = bullet.x - closestX;
-                const distToPentagonY = bullet.y - closestY;
-                const distSquaredToPentagon = (distToPentagonX * distToPentagonX) + (distToPentagonY * distToPentagonY);
-                
-                if (distSquaredToPentagon < (bullet.radius * bullet.radius)) {
-                    pentagon.hp -= bullet.strength;
-                    
-                    if (pentagon.hp <= 0) {
-                        const killer = players[bullet.ownerId];
-                        if (killer) {
-                            killer.score += pentagon.score;
-                        }
-                        
-                        delete pentagons[pentagonId];
-                    }
-                    bulletsToRemove.add(bulletId);
-                }
-            }
+            // Draw player barrel
+            drawBarrel(player);
 
-            // Bullet-Triangle collision
-            for (const triangleId in triangles) {
-                const triangle = triangles[triangleId];
-                const closestX = Math.max(triangle.x, Math.min(bullet.x, triangle.x + triangle.size));
-                const closestY = Math.max(triangle.y, Math.min(bullet.y, triangle.y + triangle.size));
-                
-                const distToTriangleX = bullet.x - closestX;
-                const distToTriangleY = bullet.y - closestY;
-                const distSquaredToTriangle = (distToTriangleX * distToTriangleX) + (distToTriangleY * distToTriangleY);
-                
-                if (distSquaredToTriangle < (bullet.radius * bullet.radius)) {
-                    triangle.hp -= bullet.strength;
-                    
-                    if (triangle.hp <= 0) {
-                        const killer = players[bullet.ownerId];
-                        if (killer) {
-                            killer.score += triangle.score;
-                        }
-                        
-                        delete triangles[triangleId];
-                    }
-                    bulletsToRemove.add(bulletId);
-                }
+            // Draw player name
+            ctx.fillStyle = 'white';
+            ctx.font = '12px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(player.username, player.x - camera.x, player.y - camera.y - player.radius - 5);
+
+            // Draw player HP bar
+            const hpBarWidth = player.radius * 2;
+            const hpBarHeight = 5;
+            const hpBarX = player.x - camera.x - player.radius;
+            const hpBarY = player.y - camera.y + player.radius + 5;
+            ctx.fillStyle = 'red';
+            ctx.fillRect(hpBarX, hpBarY, hpBarWidth, hpBarHeight);
+            ctx.fillStyle = 'lime';
+            const healthPercentage = player.hp / 100;
+            ctx.fillRect(hpBarX, hpBarY, hpBarWidth * healthPercentage, hpBarHeight);
+            
+            // Draw chat messages above the player's head
+            if (player.chatMessages && player.chatMessages.length > 0) {
+                const messageYStart = player.y - camera.y - player.radius - 20;
+                player.chatMessages.forEach((msg, index) => {
+                    const messageY = messageYStart - (15 * (player.chatMessages.length - 1 - index));
+                    const now = Date.now();
+                    const age = now - msg.timestamp;
+                    const opacity = Math.max(0, 1 - age / 5000); // Fade out over 5 seconds
+                    ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+                    ctx.font = '12px sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(msg.text, player.x - camera.x, messageY);
+                });
             }
         }
 
-        if (bullet.isFading && (now - bullet.fadeStartTime > FADE_DURATION)) {
-            bulletsToRemove.add(bulletId);
+
+        function drawBullet(bullet) {
+
+            ctx.fillStyle = 'white';
+
+            ctx.beginPath();
+
+            ctx.arc(bullet.x - camera.x, bullet.y - camera.y, bullet.radius, 0, Math.PI * 2);
+
+            ctx.fill();
+
+            ctx.closePath();
+
         }
-    }
 
-    bulletsToRemove.forEach(id => {
-        delete bullets[id];
-    });
 
-    io.emit('updateBullets', bullets);
-    io.emit('updateCubes', cubes);
-    io.emit('updatePentagons', pentagons);
-    io.emit('updateTriangles', triangles);
-}, 1000 / 60);
+        function drawCube(cube) {
 
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
-});
+            ctx.fillStyle = '#ffde59';
 
-server.listen(port, () => {
-    console.log(`Server is running on port ${port}`);
-});
+            ctx.beginPath();
+
+            ctx.rect(cube.x - camera.x, cube.y - camera.y, cube.size, cube.size);
+
+            ctx.fill();
+
+            ctx.closePath();
+
+        }
+
+
+        function drawPentagon(pentagon) {
+            ctx.fillStyle = '#800080';
+            ctx.beginPath();
+            const sides = 5;
+            const size = pentagon.size / 2;
+            for (let i = 0; i < sides; i++) {
+                const angle = i * 2 * Math.PI / sides;
+                const x = pentagon.x - camera.x + size * Math.cos(angle) + pentagon.size / 2;
+                const y = pentagon.y - camera.y + size * Math.sin(angle) + pentagon.size / 2;
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        function drawTriangle(triangle) {
+            ctx.fillStyle = '#ff4d4d';
+            ctx.beginPath();
+            const sides = 3;
+            const size = triangle.size / 2;
+            for (let i = 0; i < sides; i++) {
+                const angle = i * 2 * Math.PI / sides;
+                const x = triangle.x - camera.x + size * Math.cos(angle) + triangle.size / 2;
+                const y = triangle.y - camera.y + size * Math.sin(angle) + triangle.size / 2;
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            ctx.closePath();
+            ctx.fill();
+        }
+
+
+        function drawMap() {
+            // Outer boundary
+            ctx.strokeStyle = '#555';
+            ctx.lineWidth = 5;
+            ctx.beginPath();
+            ctx.rect(0 - camera.x, 0 - camera.y, mapSize.width, mapSize.height);
+            ctx.stroke();
+            ctx.closePath();
+        }
+
+        function drawWall() {
+            // Inner wall (pentagon spawn zone)
+            ctx.fillStyle = 'rgba(128, 0, 128, 0.2)'; // Semi-transparent purple
+            ctx.beginPath();
+            ctx.rect(wall.x - camera.x, wall.y - camera.y, wall.width, wall.height);
+            ctx.fill();
+            ctx.closePath();
+        }
+
+
+        function animate() {
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+
+            if (playerId && players[playerId]) {
+
+                const player = players[playerId];
+
+                const lerpFactor = 0.1;
+
+                camera.x += (player.x - canvas.width / 2 - camera.x) * lerpFactor;
+
+                camera.y += (player.y - canvas.height / 2 - camera.y) * lerpFactor;
+
+            }
+
+
+            drawMap();
+            drawWall();
+
+            Object.values(cubes).forEach(drawCube);
+
+            Object.values(pentagons).forEach(drawPentagon);
+
+            Object.values(triangles).forEach(drawTriangle);
+
+            Object.values(players).forEach(drawPlayer);
+
+            Object.values(bullets).forEach(drawBullet);
+
+            
+
+
+            if (playerId && players[playerId]) {
+                const player = players[playerId];
+
+                if (!chatInput.matches(':focus')) {
+                    const dx = mouse.x - (player.x - camera.x);
+                    const dy = mouse.y - (player.y - camera.y);
+                    const newBarrelAngle = Math.atan2(dy, dx);
+                    if (newBarrelAngle !== playerBarrelAngle) {
+                        playerBarrelAngle = newBarrelAngle;
+                        socket.emit('playerAim', { barrelAngle: playerBarrelAngle });
+                    }
+                }
+
+                const now = Date.now();
+
+                if (shooting && (now - lastShotTime > shootCooldown)) {
+
+                    lastShotTime = now;
+
+                    socket.emit('playerShoot');
+
+                }
+
+            }
+
+            
+            if (playerId) {
+                if (!chatInput.matches(':focus')) {
+                    socket.emit('playerInput', keys);
+                }
+            }
+
+
+            requestAnimationFrame(animate);
+
+        }
+
+    </script>
+
+</body>
+
+</html>
