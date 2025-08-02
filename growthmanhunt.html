@@ -75,13 +75,20 @@
         <input type="text" id="chat-input" placeholder="Press Enter to chat..." />
     </div>
 
-    <div id="score-display">SCORE: 26,263</div>
+    <div id="score-display">SCORE: 0</div>
     
     <div id="minimap-container">
         <canvas id="minimapCanvas"></canvas>
     </div>
 
     <script>
+        // Check for username and redirect if not present
+        const urlParams = new URLSearchParams(window.location.search);
+        const myUsername = urlParams.get('username');
+        if (!myUsername || myUsername.trim() === '') {
+            window.location.href = 'index.html';
+        }
+
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const chatInput = document.getElementById('chat-input');
@@ -116,22 +123,20 @@
         let playersLastState = {};
         let bullets = {};
         let cubes = {};
-        let pentagons = {}; // New object for pentagons
+        let pentagons = {};
         let lastUpdateTime = Date.now();
         let chatIsFocused = false;
 
         const camera = { x: 0, y: 0 };
         let wall;
         let mapSize;
-        let myUsername;
-        let currentDisplayedScore = 26263;
-
-        const urlParams = new URLSearchParams(window.location.search);
-        myUsername = urlParams.get('username') || `Player${Math.floor(Math.random() * 1000)}`;
+        let currentDisplayedScore = 0;
+        
+        // This is a client-side constant, should match server's MAX_HP
+        const MAX_HP = 100;
 
         function drawMapBoundary() {
             if (!mapSize) return;
-            // The map is a 2000x2000 square. The viewport is rectangular.
             ctx.strokeStyle = '#ffffff';
             ctx.lineWidth = 2;
             ctx.strokeRect(-camera.x, -camera.y, mapSize.width, mapSize.height);
@@ -139,8 +144,8 @@
 
         function drawWall() {
             if (!wall) return;
-            // Draw the purple square. It no longer has a border and is not an obstacle.
-            ctx.fillStyle = '#800080'; 
+            // Draw the lighter purple square. It's now just a visual landmark.
+            ctx.fillStyle = '#9370DB'; 
             ctx.fillRect(wall.x - camera.x, wall.y - camera.y, wall.width, wall.height);
         }
 
@@ -184,10 +189,10 @@
             ctx.fillText(playerToDraw.username, screenX, screenY - playerToDraw.radius - 20);
 
             // Only draw HP bar if player is damaged
-            if (playerToDraw.hp < 6) {
+            if (playerToDraw.hp < MAX_HP) {
                 const barWidth = 40;
                 const barHeight = 5;
-                const hpPercentage = playerToDraw.hp / 6; 
+                const hpPercentage = playerToDraw.hp / MAX_HP; 
                 const hpBarX = screenX - barWidth / 2;
                 const hpBarY = screenY - playerToDraw.radius - 10;
 
@@ -231,7 +236,8 @@
             const screenY = pentagon.y - camera.y;
             const radius = pentagon.size / 2;
 
-            ctx.fillStyle = '#800080'; // A dark purple color
+            // Draw a darker purple pentagon
+            ctx.fillStyle = '#4B0082'; 
             ctx.beginPath();
             
             // Draw a pentagon shape
@@ -276,7 +282,7 @@
             minimapCtx.strokeRect(drawX, drawY, mapSize.width * minimapScale, mapSize.height * minimapScale);
 
             // Draw the central purple square on minimap
-            minimapCtx.fillStyle = '#800080';
+            minimapCtx.fillStyle = '#9370DB';
             minimapCtx.fillRect(drawX + wall.x * minimapScale, drawY + wall.y * minimapScale, wall.width * minimapScale, wall.height * minimapScale);
 
             // Draw player on minimap
@@ -308,10 +314,10 @@
             playersLastState = JSON.parse(JSON.stringify(data.players));
             bullets = data.bullets;
             cubes = data.cubes;
-            pentagons = data.pentagons; // Initialize pentagons
+            pentagons = data.pentagons;
             wall = data.wall;
             mapSize = data.mapSize;
-            currentDisplayedScore = players[myId] ? players[myId].score : 26263;
+            currentDisplayedScore = players[myId] ? players[myId].score : 0;
         });
 
         socket.on('playerConnected', (newPlayer) => {
