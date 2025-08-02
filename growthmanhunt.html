@@ -20,6 +20,10 @@
 
             background-color: #010409;
 
+            font-family: sans-serif;
+
+            color: white;
+
         }
 
         canvas {
@@ -31,6 +35,27 @@
             height: 100vh;
 
         }
+        
+        .chat-container {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            width: 300px;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+        }
+        
+        .chat-input {
+            width: 100%;
+            background: none;
+            border: 1px solid #555;
+            color: white;
+            padding: 5px;
+            box-sizing: border-box;
+            outline: none;
+        }
 
     </style>
 
@@ -39,6 +64,10 @@
 <body>
 
     <canvas id="gameCanvas"></canvas>
+    
+    <div class="chat-container">
+        <input type="text" class="chat-input" placeholder="Press Enter to chat..." id="chatInput">
+    </div>
 
 
     <script src="/socket.io/socket.io.js"></script>
@@ -50,6 +79,8 @@
         const ctx = canvas.getContext('2d');
 
         const socket = io();
+
+        const chatInput = document.getElementById('chatInput');
 
 
         let playerId = null;
@@ -173,20 +204,25 @@
         
         socket.on('kill', () => {
 
-            alert('You were killed!');
-
-            const newUsername = prompt("You were killed! Enter your username to re-join:");
-
-            if (newUsername) {
-
-                socket.emit('setUsername', newUsername);
-
-            }
+            // Redirect to index.html on kill
+            window.location.href = "index.html";
 
         });
 
 
         document.addEventListener('keydown', (e) => {
+            if (chatInput.matches(':focus')) {
+                // If chat is focused, don't move the player
+                if (e.key === 'Enter') {
+                    const message = chatInput.value.trim();
+                    if (message) {
+                        socket.emit('chatMessage', message);
+                        chatInput.value = '';
+                    }
+                    chatInput.blur();
+                }
+                return;
+            }
 
             if (e.key === 'w') keys.w = true;
 
@@ -194,12 +230,20 @@
 
             if (e.key === 's') keys.s = true;
 
-            if (e.key === 'd') keys.d = false;
+            if (e.key === 'd') keys.d = true;
+
+            if (e.key === 't') {
+                e.preventDefault();
+                chatInput.focus();
+            }
 
         });
 
 
         document.addEventListener('keyup', (e) => {
+            if (chatInput.matches(':focus')) {
+                return;
+            }
 
             if (e.key === 'w') keys.w = false;
 
@@ -244,17 +288,44 @@
 
 
         function drawPlayer(player) {
-
+            // Draw player circle
             ctx.fillStyle = player.color;
-
             ctx.beginPath();
-
             ctx.arc(player.x - camera.x, player.y - camera.y, player.radius, 0, Math.PI * 2);
-
             ctx.fill();
-
             ctx.closePath();
+            
+            // Draw player name
+            ctx.fillStyle = 'white';
+            ctx.font = '12px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(player.username, player.x - camera.x, player.y - camera.y - player.radius - 5);
 
+            // Draw player HP bar
+            const hpBarWidth = player.radius * 2;
+            const hpBarHeight = 5;
+            const hpBarX = player.x - camera.x - player.radius;
+            const hpBarY = player.y - camera.y + player.radius + 5;
+            ctx.fillStyle = 'red';
+            ctx.fillRect(hpBarX, hpBarY, hpBarWidth, hpBarHeight);
+            ctx.fillStyle = 'lime';
+            const healthPercentage = player.hp / 100;
+            ctx.fillRect(hpBarX, hpBarY, hpBarWidth * healthPercentage, hpBarHeight);
+            
+            // Draw chat messages above the player's head
+            if (player.chatMessages && player.chatMessages.length > 0) {
+                const messageYStart = player.y - camera.y - player.radius - 20;
+                player.chatMessages.forEach((msg, index) => {
+                    const messageY = messageYStart - (15 * (player.chatMessages.length - 1 - index));
+                    const now = Date.now();
+                    const age = now - msg.timestamp;
+                    const opacity = Math.max(0, 1 - age / 5000); // Fade out over 5 seconds
+                    ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+                    ctx.font = '12px sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(msg.text, player.x - camera.x, messageY);
+                });
+            }
         }
 
 
@@ -389,23 +460,17 @@
 
 
             if (playerId && players[playerId]) {
-
                 const player = players[playerId];
 
-                const dx = mouse.x - (player.x - camera.x);
-
-                const dy = mouse.y - (player.y - camera.y);
-
-                const newBarrelAngle = Math.atan2(dy, dx);
-
-                if (newBarrelAngle !== playerBarrelAngle) {
-
-                    playerBarrelAngle = newBarrelAngle;
-
-                    socket.emit('playerAim', { barrelAngle: playerBarrelAngle });
-
+                if (!chatInput.matches(':focus')) {
+                    const dx = mouse.x - (player.x - camera.x);
+                    const dy = mouse.y - (player.y - camera.y);
+                    const newBarrelAngle = Math.atan2(dy, dx);
+                    if (newBarrelAngle !== playerBarrelAngle) {
+                        playerBarrelAngle = newBarrelAngle;
+                        socket.emit('playerAim', { barrelAngle: playerBarrelAngle });
+                    }
                 }
-
 
                 const now = Date.now();
 
@@ -421,9 +486,9 @@
 
             
             if (playerId) {
-
-                socket.emit('playerInput', keys);
-
+                if (!chatInput.matches(':focus')) {
+                    socket.emit('playerInput', keys);
+                }
             }
 
 
@@ -431,24 +496,11 @@
 
         }
 
-
-        // New code to prompt for a username on page load
-        function getUsername() {
-            const username = new URLSearchParams(window.location.search).get('username');
-            if (username) {
-                return username;
-            } else {
-                return prompt("Enter your username:");
-            }
-        }
-
-
-        const initialUsername = getUsername();
-        if (initialUsername) {
-            socket.emit('setUsername', initialUsername);
-        } else {
-            alert("Username is required to play.");
-        }
+        // Prompt for username only on initial load, use "Unnamed" if no input
+        const usernamePrompt = prompt("Enter your username:");
+        const initialUsername = usernamePrompt === null || usernamePrompt.trim() === "" ? "Unnamed" : usernamePrompt;
+        
+        socket.emit('setUsername', initialUsername);
 
 
         animate();
