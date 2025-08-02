@@ -194,7 +194,7 @@
 
             if (e.key === 's') keys.s = true;
 
-            if (e.key === 'd') keys.d = true;
+            if (e.key === 'd') keys.d = false;
 
         });
 
@@ -429,6 +429,25 @@
 
             requestAnimationFrame(animate);
 
+        }
+
+
+        // New code to prompt for a username on page load
+        function getUsername() {
+            const username = new URLSearchParams(window.location.search).get('username');
+            if (username) {
+                return username;
+            } else {
+                return prompt("Enter your username:");
+            }
+        }
+
+
+        const initialUsername = getUsername();
+        if (initialUsername) {
+            socket.emit('setUsername', initialUsername);
+        } else {
+            alert("Username is required to play.");
         }
 
 
