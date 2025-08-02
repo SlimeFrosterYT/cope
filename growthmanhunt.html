@@ -9,19 +9,52 @@
             margin: 0;
             overflow: hidden;
             background-color: #0d0d0d;
+            font-family: sans-serif;
+            color: white;
         }
         canvas {
             display: block;
+        }
+        #chat-container {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            width: 300px;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 5px;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+        #chat-messages {
+            height: 150px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        #chat-input {
+            width: 100%;
+            padding: 5px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            box-sizing: border-box;
         }
     </style>
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 </head>
 <body>
     <canvas id="gameCanvas"></canvas>
+    
+    <div id="chat-container">
+        <div id="chat-messages"></div>
+        <input type="text" id="chat-input" placeholder="Press Enter to chat..." />
+    </div>
 
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
+        const chatInput = document.getElementById('chat-input');
+        const chatMessages = document.getElementById('chat-messages');
 
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
@@ -49,49 +82,14 @@
         let playersLastState = {};
         let bullets = {};
         let lastUpdateTime = Date.now();
+        let chatIsFocused = false;
 
         const camera = { x: 0, y: 0 };
-        let wall; // The wall data will now come from the server
+        let wall;
 
-        socket.on('connect', () => {
-            console.log('Connected to server with ID:', socket.id);
-        });
-
-        socket.on('init', (data) => {
-            myId = data.playerId;
-            players = data.players;
-            playersLastState = JSON.parse(JSON.stringify(data.players));
-            bullets = data.bullets;
-            wall = data.wall; // Receive the wall data from the server
-        });
-
-        socket.on('playerConnected', (newPlayer) => {
-            players[newPlayer.id] = newPlayer;
-            playersLastState[newPlayer.id] = newPlayer;
-        });
-
-        socket.on('updatePlayers', (serverPlayers) => {
-            playersLastState = JSON.parse(JSON.stringify(players));
-            players = serverPlayers;
-            lastUpdateTime = Date.now();
-        });
-
-        socket.on('playerDisconnected', (playerId) => {
-            delete players[playerId];
-            delete playersLastState[playerId];
-        });
-
-        socket.on('newBullet', (bulletData) => {
-            bullets[bulletData.id] = bulletData;
-        });
-
-        socket.on('updateBullets', (serverBullets) => {
-            bullets = serverBullets;
-        });
-        
         function drawWall() {
-            if (!wall) return; // Don't draw if wall data isn't received yet
-            ctx.strokeStyle = '#ffffff'; // Color is now hardcoded on the client
+            if (!wall) return;
+            ctx.strokeStyle = '#ffffff';
             ctx.lineWidth = 2;
             ctx.strokeRect(wall.x - camera.x, wall.y - camera.y, wall.width, wall.height);
         }
@@ -147,8 +145,51 @@
             ctx.beginPath();
             ctx.arc(screenX, screenY, bullet.radius, 0, Math.PI * 2);
             ctx.fill();
-            ctx.globalAlpha = 1; // Reset alpha for other drawings
+            ctx.globalAlpha = 1;
         }
+
+        function addMessageToChat(message) {
+            const p = document.createElement('p');
+            p.textContent = message;
+            chatMessages.appendChild(p);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        socket.on('init', (data) => {
+            myId = data.playerId;
+            players = data.players;
+            playersLastState = JSON.parse(JSON.stringify(data.players));
+            bullets = data.bullets;
+            wall = data.wall;
+        });
+
+        socket.on('playerConnected', (newPlayer) => {
+            players[newPlayer.id] = newPlayer;
+            playersLastState[newPlayer.id] = newPlayer;
+        });
+
+        socket.on('updatePlayers', (serverPlayers) => {
+            playersLastState = JSON.parse(JSON.stringify(players));
+            players = serverPlayers;
+            lastUpdateTime = Date.now();
+        });
+
+        socket.on('playerDisconnected', (playerId) => {
+            delete players[playerId];
+            delete playersLastState[playerId];
+        });
+
+        socket.on('newBullet', (bulletData) => {
+            bullets[bulletData.id] = bulletData;
+        });
+
+        socket.on('updateBullets', (serverBullets) => {
+            bullets = serverBullets;
+        });
+
+        socket.on('chatMessage', (message) => {
+            addMessageToChat(message);
+        });
 
         function gameLoop() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -158,25 +199,11 @@
                 camera.x = myPlayer.x - canvas.width / 2;
                 camera.y = myPlayer.y - canvas.height / 2;
 
-                let vx = 0;
-                let vy = 0;
-                const speed = 4.5;
-                
-                if (keys.w) vy -= speed;
-                if (keys.s) vy += speed;
-                if (keys.a) vx -= speed;
-                if (keys.d) vx += speed;
-
-                myPlayer.x += vx;
-                myPlayer.y += vy;
+                socket.emit('playerInput', keys);
                 
                 myPlayer.barrelAngle = Math.atan2(mouse.y - canvas.height / 2, mouse.x - canvas.width / 2);
 
-                socket.emit('playerMove', { 
-                    x: myPlayer.x, 
-                    y: myPlayer.y, 
-                    barrelAngle: myPlayer.barrelAngle 
-                });
+                socket.emit('playerAim', { barrelAngle: myPlayer.barrelAngle });
                 
                 if (isMouseDown && Date.now() - lastShotTime > cooldown) {
                     lastShotTime = Date.now();
@@ -209,6 +236,21 @@
         }
 
         window.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                if (chatIsFocused) {
+                    const message = chatInput.value.trim();
+                    if (message) {
+                        socket.emit('chatMessage', message);
+                        chatInput.value = '';
+                    }
+                    chatInput.blur();
+                    chatIsFocused = false;
+                } else {
+                    chatInput.focus();
+                    chatIsFocused = true;
+                }
+            }
+            if (chatIsFocused) return;
             if (e.key === 'w') keys.w = true;
             if (e.key === 'a') keys.a = true;
             if (e.key === 's') keys.s = true;
@@ -228,11 +270,19 @@
         });
 
         window.addEventListener('mousedown', () => {
-            isMouseDown = true;
+            if (!chatIsFocused) isMouseDown = true;
         });
 
         window.addEventListener('mouseup', () => {
             isMouseDown = false;
+        });
+
+        chatInput.addEventListener('focus', () => {
+            chatIsFocused = true;
+        });
+
+        chatInput.addEventListener('blur', () => {
+            chatIsFocused = false;
         });
 
         gameLoop();
