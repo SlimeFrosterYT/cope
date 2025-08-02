@@ -61,8 +61,8 @@
             padding: 5px;
         }
         #minimapCanvas {
-            width: 300px; /* Increased minimap size */
-            height: 300px; /* Increased minimap size */
+            width: 300px;
+            height: 300px;
         }
     </style>
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
@@ -124,12 +124,13 @@
         let bullets = {};
         let cubes = {};
         let pentagons = {};
+        let triangles = {};
         let lastUpdateTime = Date.now();
         let chatIsFocused = false;
 
         const camera = { x: 0, y: 0 };
-        let wall;
         let mapSize;
+        let wall;
         let currentDisplayedScore = 0;
         
         // This is a client-side constant, should match server's MAX_HP
@@ -137,7 +138,7 @@
 
         function drawWall() {
             if (!wall) return;
-            // Draw the lighter purple square. It's now just a visual landmark.
+            // Draw the lighter purple square.
             ctx.fillStyle = '#9370DB'; 
             ctx.fillRect(wall.x - camera.x, wall.y - camera.y, wall.width, wall.height);
         }
@@ -162,6 +163,7 @@
             const screenX = playerToDraw.x - camera.x;
             const screenY = playerToDraw.y - camera.y;
 
+            // Draw the player circle
             ctx.fillStyle = playerToDraw.color;
             ctx.beginPath();
             ctx.arc(screenX, screenY, playerToDraw.radius, 0, Math.PI * 2);
@@ -228,7 +230,7 @@
             const screenX = pentagon.x - camera.x;
             const screenY = pentagon.y - camera.y;
             const radius = pentagon.size / 2;
-            const maxHp = pentagon.score;
+            const maxHp = pentagon.hp;
 
             // Draw a darker purple pentagon
             ctx.fillStyle = '#4B0082'; 
@@ -249,10 +251,44 @@
             ctx.fill();
 
             // Draw HP bar if pentagon is damaged
-            if (pentagon.hp < maxHp) {
+            if (pentagon.hp < pentagon.strength) {
                 const barWidth = pentagon.size;
                 const barHeight = 4;
-                const hpPercentage = pentagon.hp / maxHp; 
+                const hpPercentage = pentagon.hp / pentagon.strength; 
+                const hpBarX = screenX - barWidth / 2;
+                const hpBarY = screenY - radius - 10;
+
+                // Background of HP bar
+                ctx.fillStyle = 'red';
+                ctx.fillRect(hpBarX, hpBarY, barWidth, barHeight);
+                
+                // Current HP
+                ctx.fillStyle = 'green';
+                ctx.fillRect(hpBarX, hpBarY, barWidth * hpPercentage, barHeight);
+            }
+        }
+        
+        function drawTriangle(triangle) {
+            const screenX = triangle.x - camera.x;
+            const screenY = triangle.y - camera.y;
+            const radius = triangle.size / 2;
+            const maxHp = triangle.hp;
+
+            ctx.fillStyle = 'red'; 
+            ctx.beginPath();
+            
+            // Draw a triangle shape
+            ctx.moveTo(screenX, screenY - radius);
+            ctx.lineTo(screenX + radius * Math.cos(Math.PI / 6), screenY + radius * Math.sin(Math.PI / 6));
+            ctx.lineTo(screenX - radius * Math.cos(Math.PI / 6), screenY + radius * Math.sin(Math.PI / 6));
+            ctx.closePath();
+            ctx.fill();
+
+            // Draw HP bar if triangle is damaged
+            if (triangle.hp < triangle.strength) {
+                const barWidth = triangle.size;
+                const barHeight = 4;
+                const hpPercentage = triangle.hp / triangle.strength; 
                 const hpBarX = screenX - barWidth / 2;
                 const hpBarY = screenY - radius - 10;
 
@@ -266,14 +302,15 @@
             }
         }
 
+
         function drawMinimap() {
-            if (!wall || !players[myId] || !mapSize) return;
+            if (!players[myId] || !mapSize) return;
 
             const mapWidth = minimapCanvas.width;
             const mapHeight = minimapCanvas.height;
             const minimapScale = Math.min(mapWidth / mapSize.width, mapHeight / mapSize.height);
-            const drawX = (mapWidth - mapSize.width * minimapScale) / 2;
-            const drawY = (mapHeight - mapSize.height * minimapScale) / 2;
+            const drawX = 0;
+            const drawY = 0;
 
             minimapCtx.clearRect(0, 0, mapWidth, mapHeight);
             
@@ -283,8 +320,11 @@
             minimapCtx.strokeRect(drawX, drawY, mapSize.width * minimapScale, mapSize.height * minimapScale);
 
             // Draw the central purple square on minimap
-            minimapCtx.fillStyle = '#9370DB';
-            minimapCtx.fillRect(drawX + wall.x * minimapScale, drawY + wall.y * minimapScale, wall.width * minimapScale, wall.height * minimapScale);
+            if (wall) {
+                minimapCtx.fillStyle = '#9370DB';
+                minimapCtx.fillRect(drawX + wall.x * minimapScale, drawY + wall.y * minimapScale, wall.width * minimapScale, wall.height * minimapScale);
+            }
+
 
             // Draw player on minimap
             const myPlayer = players[myId];
@@ -316,6 +356,7 @@
             bullets = data.bullets;
             cubes = data.cubes;
             pentagons = data.pentagons;
+            triangles = data.triangles;
             wall = data.wall;
             mapSize = data.mapSize;
             currentDisplayedScore = players[myId] ? players[myId].score : 0;
@@ -351,6 +392,10 @@
         
         socket.on('updatePentagons', (serverPentagons) => {
             pentagons = serverPentagons;
+        });
+
+        socket.on('updateTriangles', (serverTriangles) => {
+            triangles = serverTriangles;
         });
 
         socket.on('chatMessage', (message) => {
@@ -411,6 +456,10 @@
             
             for (const id in pentagons) {
                 drawPentagon(pentagons[id]);
+            }
+
+            for (const id in triangles) {
+                drawTriangle(triangles[id]);
             }
 
             for (const id in players) {
