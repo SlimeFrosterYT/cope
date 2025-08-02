@@ -14,15 +14,16 @@ const port = process.env.PORT || 3000;
 const FADE_DURATION = 1000;
 const BULLET_KNOCKBACK_FORCE = 0.5;
 const CUBE_SIZE = 20;
-const PENTAGON_SIZE = 25;
+const PENTAGON_SIZE = 50; // Doubled the pentagon size
 const MAX_CUBES = 10;
 const MAX_PENTAGONS = 3;
 const CUBE_SPAWN_INTERVAL = 5000;
 const PENTAGON_SPAWN_INTERVAL = 8000;
-const PLAYER_COLLISION_DAMAGE = 1; // Updated damage for new HP system
-const MAX_HP = 100; // Updated max HP
-const HP_REGEN_RATE = 0.25; // Updated regen rate for new HP system
-const BULLET_DAMAGE = 10; // New bullet damage value
+const PLAYER_COLLISION_DAMAGE = 1; 
+const MAX_HP = 100;
+const HP_REGEN_DELAY = 20000; // 20 seconds delay before regen starts
+const HP_REGEN_RATE = 0.05; // Slower regen rate
+const BULLET_DAMAGE = 10;
 const CUBE_SCORE = 5;
 const PENTAGON_SCORE = 20;
 
@@ -245,8 +246,9 @@ io.on('connection', (socket) => {
             friction: 0.85,
             maxSpeed: 4.5,
             hp: MAX_HP,
-            score: 0, // Reset score on new player
-            keys: { w: false, a: false, s: false, d: false }
+            score: 0,
+            keys: { w: false, a: false, s: false, d: false },
+            lastDamageTime: 0 // New property to track last time player was damaged
         };
 
         socket.emit('init', { playerId: socket.id, players, bullets, cubes, pentagons, wall, mapSize });
@@ -308,7 +310,9 @@ setInterval(() => {
 
             if (distance < player1.radius + player2.radius) {
                 player1.hp -= PLAYER_COLLISION_DAMAGE;
+                player1.lastDamageTime = now;
                 player2.hp -= PLAYER_COLLISION_DAMAGE;
+                player2.lastDamageTime = now;
             }
         }
     }
@@ -340,7 +344,8 @@ setInterval(() => {
         player.velocity.x = newVelocityX;
         player.velocity.y = newVelocityY;
 
-        if (player.hp < MAX_HP) {
+        // New HP Regeneration logic
+        if (player.hp < MAX_HP && (now - player.lastDamageTime > HP_REGEN_DELAY)) {
             player.hp = Math.min(player.hp + HP_REGEN_RATE, MAX_HP);
         }
 
@@ -376,6 +381,7 @@ setInterval(() => {
 
                 if (distSquaredToPlayer < (player.radius * player.radius) && bullet.ownerId !== player.socketId) {
                     player.hp -= BULLET_DAMAGE;
+                    player.lastDamageTime = now; // Reset regen timer on damage
 
                     const angle = Math.atan2(distToPlayerY, distToPlayerX);
                     player.velocity.x += Math.cos(angle) * BULLET_KNOCKBACK_FORCE;
@@ -393,10 +399,7 @@ setInterval(() => {
                         delete players[playerId];
                     }
 
-                    bullet.isFading = true;
-                    bullet.fadeStartTime = now;
-                    bullet.velocity.x = 0;
-                    bullet.velocity.y = 0;
+                    bulletsToRemove.push(bulletId);
                 }
             }
 
@@ -421,7 +424,7 @@ setInterval(() => {
                 }
             }
             
-            // New Bullet-Pentagon collision (Pentagons have health)
+            // Bullet-Pentagon collision (Pentagons have health)
             for (const pentagonId in pentagons) {
                 const pentagon = pentagons[pentagonId];
                 const closestX = Math.max(pentagon.x, Math.min(bullet.x, pentagon.x + pentagon.size));
