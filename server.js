@@ -17,6 +17,8 @@ const CUBE_SIZE = 20;
 const MAX_CUBES = 10;
 const CUBE_SPAWN_INTERVAL = 5000;
 const PLAYER_COLLISION_DAMAGE = 0.1;
+const MAX_HP = 6;
+const HP_REGEN_RATE = 0.005;
 
 // Define the larger map size
 const mapSize = {
@@ -85,12 +87,9 @@ function spawnCube() {
                 break;
             }
         }
-
-        // Check for collision with the central wall
-        if (!collision && rectRectColliding(tempCube, wall)) {
-            collision = true;
-        }
-
+        
+        // No longer check for collision with the central wall
+        
         if (collision) {
             attempts++;
             continue;
@@ -145,10 +144,8 @@ function getPlayerSpawnPosition(playerRadius) {
             height: playerRadius * 2
         };
 
-        // Check if the spawn position overlaps with the wall
-        if (!rectRectColliding(playerBounds, wall)) {
-            spawnPosition = { x, y };
-        }
+        // No longer check for collision with the central wall on spawn
+        spawnPosition = { x, y };
         attempts++;
     }
     return spawnPosition;
@@ -200,7 +197,7 @@ io.on('connection', (socket) => {
             acceleration: 0.25,
             friction: 0.85,
             maxSpeed: 4.5,
-            hp: 6,
+            hp: MAX_HP,
             score: 26263,
             keys: { w: false, a: false, s: false, d: false }
         };
@@ -289,50 +286,19 @@ setInterval(() => {
         let nextX = player.x + newVelocityX;
         let nextY = player.y + newVelocityY;
 
-        // Boundary collision logic for the new larger map
-        const minX = player.radius;
-        const maxX = mapSize.width - player.radius;
-        const minY = player.radius;
-        const maxY = mapSize.height - player.radius;
-        
-        if (nextX < minX) {
-            nextX = minX;
-            newVelocityX = 0;
-        } else if (nextX > maxX) {
-            nextX = maxX;
-            newVelocityX = 0;
-        }
+        // Boundary collision fix: clamp player position but don't reset velocity
+        player.x = Math.max(player.radius, Math.min(nextX, mapSize.width - player.radius));
+        player.y = Math.max(player.radius, Math.min(nextY, mapSize.height - player.radius));
 
-        if (nextY < minY) {
-            nextY = minY;
-            newVelocityY = 0;
-        } else if (nextY > maxY) {
-            nextY = maxY;
-            newVelocityY = 0;
-        }
-
-        player.x = nextX;
-        player.y = nextY;
         player.velocity.x = newVelocityX;
         player.velocity.y = newVelocityY;
 
-        // Check for collision with the central wall
-        const playerCircle = { x: player.x, y: player.y, radius: player.radius };
-        if (rectCircleColliding(playerCircle, wall)) {
-            // Simple bounce logic
-            const dx = player.x - (wall.x + wall.width / 2);
-            const dy = player.y - (wall.y + wall.height / 2);
-
-            if (Math.abs(dx) > Math.abs(dy)) {
-                // Horizontal collision
-                player.x -= newVelocityX;
-                player.velocity.x *= -1;
-            } else {
-                // Vertical collision
-                player.y -= newVelocityY;
-                player.velocity.y *= -1;
-            }
+        // HP Regeneration
+        if (player.hp < MAX_HP) {
+            player.hp = Math.min(player.hp + HP_REGEN_RATE, MAX_HP);
         }
+
+        // The central wall is no longer an obstacle, so this check is removed.
 
         // Check for player death after all damage is applied
         if (player.hp <= 0) {
@@ -349,21 +315,7 @@ setInterval(() => {
             bullet.x += bullet.velocity.x;
             bullet.y += bullet.velocity.y;
 
-            // Bullet-Wall collision
-            if (rectCircleColliding(bullet, wall)) {
-                // Determine which side of the wall was hit and reverse the velocity component
-                const wallMidX = wall.x + wall.width / 2;
-                const wallMidY = wall.y + wall.height / 2;
-
-                const dx = bullet.x - wallMidX;
-                const dy = bullet.y - wallMidY;
-
-                if (Math.abs(dx) > Math.abs(dy)) {
-                    bullet.velocity.x *= -1; // Bounce horizontally
-                } else {
-                    bullet.velocity.y *= -1; // Bounce vertically
-                }
-            }
+            // The central wall is no longer an obstacle, so collision is removed.
 
             // Bullet-Map Boundary collision
             if (bullet.x < 0 || bullet.x > mapSize.width || bullet.y < 0 || bullet.y > mapSize.height) {
