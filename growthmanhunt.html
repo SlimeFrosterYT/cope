@@ -39,6 +39,18 @@
             color: white;
             box-sizing: border-box;
         }
+        #score-display {
+            position: fixed;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-size: 20px;
+            font-weight: bold;
+            color: white;
+        }
     </style>
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 </head>
@@ -50,11 +62,14 @@
         <input type="text" id="chat-input" placeholder="Press Enter to chat..." />
     </div>
 
+    <div id="score-display">SCORE: 26,263</div>
+
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const chatInput = document.getElementById('chat-input');
         const chatMessages = document.getElementById('chat-messages');
+        const scoreDisplay = document.getElementById('score-display');
 
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
@@ -123,13 +138,12 @@
             ctx.arc(screenX, screenY, playerToDraw.radius, 0, Math.PI * 2);
             ctx.fill();
 
-            // Draw the barrel
+            // Draw the barrel (original style)
             ctx.save();
             ctx.translate(screenX, screenY);
             ctx.rotate(angle);
             ctx.fillStyle = '#cccccc';
-            // Barrel drawing fix: Proportional size and correct position
-            ctx.fillRect(playerToDraw.radius, -playerToDraw.radius * 0.1, playerToDraw.radius * 1.2, playerToDraw.radius * 0.2);
+            ctx.fillRect(playerToDraw.radius - 2, -20 / 2, 20, 20);
             ctx.restore();
 
             // Draw username
@@ -203,6 +217,9 @@
             playersLastState = JSON.parse(JSON.stringify(players));
             players = serverPlayers;
             lastUpdateTime = Date.now();
+            if (players[myId]) {
+                scoreDisplay.textContent = `SCORE: ${players[myId].score.toLocaleString()}`;
+            }
         });
 
         socket.on('playerDisconnected', (playerId) => {
