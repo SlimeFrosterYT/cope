@@ -12,6 +12,7 @@ app.use(express.static(__dirname));
 
 const port = process.env.PORT || 3000;
 const FADE_DURATION = 1000;
+const BULLET_KNOCKBACK_FORCE = 0.5;
 
 const players = {};
 const bullets = {};
@@ -29,6 +30,7 @@ io.on('connection', (socket) => {
 
     players[socket.id] = {
         id: socket.id,
+        username: `Player${socket.id.substring(0, 4)}`,
         x: 500,
         y: 500,
         color: '#ffffff',
@@ -46,8 +48,16 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
         console.log('A user disconnected:', socket.id);
+        io.emit('chatMessage', `${players[socket.id].username} has left the game.`);
         delete players[socket.id];
         io.emit('playerDisconnected', socket.id);
+    });
+
+    socket.on('setUsername', (username) => {
+        if (players[socket.id]) {
+            players[socket.id].username = username;
+            io.emit('chatMessage', `${username} has joined the game.`);
+        }
     });
 
     socket.on('playerInput', (keys) => {
@@ -67,7 +77,7 @@ io.on('connection', (socket) => {
     socket.on('chatMessage', (message) => {
         const player = players[socket.id];
         if (player) {
-            io.emit('chatMessage', `Player ${socket.id.substring(0, 4)}: ${message}`);
+            io.emit('chatMessage', `${player.username}: ${message}`);
         }
     });
 
@@ -136,17 +146,39 @@ setInterval(() => {
             bullet.x += bullet.velocity.x;
             bullet.y += bullet.velocity.y;
 
+            // Check for bullet-wall collision
             const closestX = Math.max(wall.x, Math.min(bullet.x, wall.x + wall.width));
             const closestY = Math.max(wall.y, Math.min(bullet.y, wall.y + wall.height));
-            const distanceX = bullet.x - closestX;
-            const distanceY = bullet.y - closestY;
-            const distanceSquared = (distanceX * distanceX) + (distanceY * distanceY);
+            const distToWallX = bullet.x - closestX;
+            const distToWallY = bullet.y - closestY;
+            const distSquaredToWall = (distToWallX * distToWallX) + (distToWallY * distToWallY);
 
-            if (distanceSquared < (bullet.radius * bullet.radius)) {
+            if (distSquaredToWall < (bullet.radius * bullet.radius)) {
                 bullet.isFading = true;
                 bullet.fadeStartTime = now;
                 bullet.velocity.x = 0;
                 bullet.velocity.y = 0;
+            }
+
+            // Check for bullet-player collision
+            for (const playerId in players) {
+                const player = players[playerId];
+                const distToPlayerX = bullet.x - player.x;
+                const distToPlayerY = bullet.y - player.y;
+                const distSquaredToPlayer = (distToPlayerX * distToPlayerX) + (distToPlayerY * distToPlayerY);
+
+                if (distSquaredToPlayer < (player.radius * player.radius)) {
+                    // Apply knockback to the player
+                    const angle = Math.atan2(distToPlayerY, distToPlayerX);
+                    player.velocity.x += Math.cos(angle) * BULLET_KNOCKBACK_FORCE;
+                    player.velocity.y += Math.sin(angle) * BULLET_KNOCKBACK_FORCE;
+
+                    // Fade the bullet
+                    bullet.isFading = true;
+                    bullet.fadeStartTime = now;
+                    bullet.velocity.x = 0;
+                    bullet.velocity.y = 0;
+                }
             }
         }
 
@@ -163,7 +195,7 @@ setInterval(() => {
 }, 1000 / 60);
 
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'growthmanhunt.html'));
+    res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 server.listen(port, () => {
