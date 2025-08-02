@@ -86,6 +86,11 @@
 
         const camera = { x: 0, y: 0 };
         let wall;
+        let myUsername;
+
+        // Get username from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        myUsername = urlParams.get('username') || `Player${Math.floor(Math.random() * 1000)}`;
 
         function drawWall() {
             if (!wall) return;
@@ -126,6 +131,12 @@
             ctx.fillStyle = '#cccccc';
             ctx.fillRect(playerToDraw.radius - 2, -20 / 2, 20, 20);
             ctx.restore();
+
+            // Draw username
+            ctx.fillStyle = 'white';
+            ctx.textAlign = 'center';
+            ctx.font = '12px sans-serif';
+            ctx.fillText(playerToDraw.username, screenX, screenY - playerToDraw.radius - 10);
         }
 
         function drawBullet(bullet) {
@@ -155,6 +166,12 @@
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
+        // --- Socket.io Listeners ---
+        socket.on('connect', () => {
+            console.log('Connected to server with ID:', socket.id);
+            socket.emit('setUsername', myUsername);
+        });
+        
         socket.on('init', (data) => {
             myId = data.playerId;
             players = data.players;
@@ -191,6 +208,7 @@
             addMessageToChat(message);
         });
 
+        // --- Main Game Loop ---
         function gameLoop() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -235,6 +253,7 @@
             requestAnimationFrame(gameLoop);
         }
 
+        // --- Event Listeners ---
         window.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 if (chatIsFocused) {
