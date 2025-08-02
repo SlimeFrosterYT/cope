@@ -1,255 +1,1061 @@
 <!DOCTYPE html>
+
 <html lang="en">
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Growth Manhunt</title>
-    <style>
-        body {
-            margin: 0;
-            overflow: hidden;
-            background-color: #010409;
-        }
-        canvas {
-            display: block;
-            width: 100vw;
-            height: 100vh;
-        }
-    </style>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Growth Manhunt</title>
+
+    <style>
+
+        body {
+
+            margin: 0;
+
+            overflow: hidden;
+
+            background-color: #0d0d0d;
+
+            font-family: sans-serif;
+
+            color: white;
+
+        }
+
+        canvas {
+
+            display: block;
+
+        }
+
+        #chat-container {
+
+            position: fixed;
+
+            bottom: 10px;
+
+            left: 10px;
+
+            width: 300px;
+
+            background: rgba(0, 0, 0, 0.5);
+
+            border-radius: 5px;
+
+            padding: 10px;
+
+            box-sizing: border-box;
+
+        }
+
+        #chat-messages {
+
+            height: 150px;
+
+            overflow-y: auto;
+
+            margin-bottom: 10px;
+
+            font-size: 14px;
+
+        }
+
+        #chat-input {
+
+            width: 100%;
+
+            padding: 5px;
+
+            background: rgba(255, 255, 255, 0.1);
+
+            border: 1px solid rgba(255, 255, 255, 0.3);
+
+            color: white;
+
+            box-sizing: border-box;
+
+        }
+
+        #score-display {
+
+            position: fixed;
+
+            bottom: 10px;
+
+            left: 50%;
+
+            transform: translateX(-50%);
+
+            background: rgba(0, 0, 0, 0.5);
+
+            padding: 10px 20px;
+
+            border-radius: 5px;
+
+            font-size: 20px;
+
+            font-weight: bold;
+
+            color: white;
+
+        }
+
+        #minimap-container {
+
+            position: fixed;
+
+            bottom: 10px;
+
+            right: 10px;
+
+            background: rgba(0, 0, 0, 0.5);
+
+            border: 2px solid white;
+
+            border-radius: 5px;
+
+            padding: 5px;
+
+        }
+
+        #minimapCanvas {
+
+            width: 300px;
+
+            height: 300px;
+
+        }
+
+    </style>
+
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
 </head>
+
 <body>
-    <canvas id="gameCanvas"></canvas>
 
-    <script src="/socket.io/socket.io.js"></script>
-    <script>
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        const socket = io();
+    <canvas id="gameCanvas"></canvas>
 
-        let playerId = null;
-        let players = {};
-        let bullets = {};
-        let cubes = {};
-        let pentagons = {};
-        let triangles = {};
-        let wall = {};
-        let mapSize = {};
+    
 
-        const keys = { w: false, a: false, s: false, d: false };
-        let mouse = { x: 0, y: 0 };
-        let playerBarrelAngle = 0;
-        let shooting = false;
+    <div id="chat-container">
 
-        let camera = { x: 0, y: 0 };
-        
-        window.addEventListener('resize', () => {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            if (playerId && players[playerId]) {
-                const player = players[playerId];
-                camera.x = player.x - canvas.width / 2;
-                camera.y = player.y - canvas.height / 2;
-            }
-        });
-        window.dispatchEvent(new Event('resize'));
+        <div id="chat-messages"></div>
 
-        const username = prompt("Enter your username:");
-        if (username) {
-            socket.emit('setUsername', username);
-        } else {
-            alert("Username is required to join the game.");
-        }
+        <input type="text" id="chat-input" placeholder="Press Enter to chat..." />
+
+    </div>
 
 
-        socket.on('init', (data) => {
-            playerId = data.playerId;
-            players = data.players;
-            bullets = data.bullets;
-            cubes = data.cubes;
-            pentagons = data.pentagons;
-            triangles = data.triangles;
-            wall = data.wall;
-            mapSize = data.mapSize;
 
-            if (players[playerId]) {
-                camera.x = players[playerId].x - canvas.width / 2;
-                camera.y = players[playerId].y - canvas.height / 2;
-            }
-        });
+    <div id="score-display">SCORE: 0</div>
 
-        socket.on('updatePlayers', (serverPlayers) => {
-            players = serverPlayers;
-        });
+    
 
-        socket.on('updateBullets', (serverBullets) => {
-            bullets = serverBullets;
-        });
+    <div id="minimap-container">
 
-        socket.on('updateCubes', (serverCubes) => {
-            cubes = serverCubes;
-        });
+        <canvas id="minimapCanvas"></canvas>
 
-        socket.on('updatePentagons', (serverPentagons) => {
-            pentagons = serverPentagons;
-        });
+    </div>
 
-        socket.on('updateTriangles', (serverTriangles) => {
-            triangles = serverTriangles;
-        });
-        
-        socket.on('kill', () => {
-            alert('You were killed!');
-            const newUsername = prompt("You were killed! Enter your username to re-join:");
-            if (newUsername) {
-                socket.emit('setUsername', newUsername);
-            }
-        });
 
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'w') keys.w = true;
-            if (e.key === 'a') keys.a = true;
-            if (e.key === 's') keys.s = true;
-            if (e.key === 'd') keys.d = true;
-        });
 
-        document.addEventListener('keyup', (e) => {
-            if (e.key === 'w') keys.w = false;
-            if (e.key === 'a') keys.a = false;
-            if (e.key === 's') keys.s = false;
-            if (e.key === 'd') keys.d = false;
-        });
+    <script>
 
-        canvas.addEventListener('mousemove', (e) => {
-            mouse.x = e.clientX;
-            mouse.y = e.clientY;
-        });
+        // Check for username and redirect if not present
 
-        canvas.addEventListener('mousedown', (e) => {
-            if (e.button === 0) {
-                shooting = true;
-            }
-        });
+        const urlParams = new URLSearchParams(window.location.search);
 
-        canvas.addEventListener('mouseup', (e) => {
-            if (e.button === 0) {
-                shooting = false;
-            }
-        });
+        const myUsername = urlParams.get('username');
 
-        function drawPlayer(player) {
-            ctx.fillStyle = player.color;
-            ctx.beginPath();
-            ctx.arc(player.x - camera.x, player.y - camera.y, player.radius, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.closePath();
-        }
+        if (!myUsername || myUsername.trim() === '') {
 
-        function drawBullet(bullet) {
-            ctx.fillStyle = 'white';
-            ctx.beginPath();
-            ctx.arc(bullet.x - camera.x, bullet.y - camera.y, bullet.radius, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.closePath();
-        }
+            window.location.href = 'index.html';
 
-        function drawCube(cube) {
-            ctx.fillStyle = '#ffde59';
-            ctx.beginPath();
-            ctx.rect(cube.x - camera.x, cube.y - camera.y, cube.size, cube.size);
-            ctx.fill();
-            ctx.closePath();
-        }
+        }
 
-        function drawPentagon(pentagon) {
-            ctx.fillStyle = '#800080';
-            ctx.beginPath();
-            const sides = 5;
-            const size = pentagon.size / 2;
-            ctx.moveTo(pentagon.x - camera.x + size * Math.cos(0), pentagon.y - camera.y + size * Math.sin(0));
-            for (let i = 1; i <= sides; i++) {
-                ctx.lineTo(pentagon.x - camera.x + size * Math.cos(i * 2 * Math.PI / sides), pentagon.y - camera.y + size * Math.sin(i * 2 * Math.PI / sides));
-            }
-            ctx.fill();
-            ctx.closePath();
-        }
 
-        function drawTriangle(triangle) {
-            ctx.fillStyle = '#ff4d4d';
-            ctx.beginPath();
-            const sides = 3;
-            const size = triangle.size / 2;
-            ctx.moveTo(triangle.x - camera.x + size * Math.cos(0), triangle.y - camera.y + size * Math.sin(0));
-            for (let i = 1; i <= sides; i++) {
-                ctx.lineTo(triangle.x - camera.x + size * Math.cos(i * 2 * Math.PI / sides), triangle.y - camera.y + size * Math.sin(i * 2 * Math.PI / sides));
-            }
-            ctx.fill();
-            ctx.closePath();
-        }
 
-        function drawMap() {
-            ctx.strokeStyle = '#555';
-            ctx.lineWidth = 5;
-            ctx.beginPath();
-            ctx.rect(0 - camera.x, 0 - camera.y, mapSize.width, mapSize.height);
-            ctx.stroke();
-            ctx.closePath();
-        }
+        const canvas = document.getElementById('gameCanvas');
 
-        function animate() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const ctx = canvas.getContext('2d');
 
-            if (playerId && players[playerId]) {
-                const player = players[playerId];
-                const lerpFactor = 0.1;
-                camera.x += (player.x - canvas.width / 2 - camera.x) * lerpFactor;
-                camera.y += (player.y - canvas.height / 2 - camera.y) * lerpFactor;
-            }
+        const chatInput = document.getElementById('chat-input');
 
-            drawMap();
-            Object.values(cubes).forEach(drawCube);
-            Object.values(pentagons).forEach(drawPentagon);
-            Object.values(triangles).forEach(drawTriangle);
-            Object.values(players).forEach(drawPlayer);
-            Object.values(bullets).forEach(drawBullet);
-            
+        const chatMessages = document.getElementById('chat-messages');
 
-            if (playerId && players[playerId]) {
-                const player = players[playerId];
-                const dx = mouse.x - (player.x - camera.x);
-                const dy = mouse.y - (player.y - camera.y);
-                const newBarrelAngle = Math.atan2(dy, dx);
-                if (newBarrelAngle !== playerBarrelAngle) {
-                    playerBarrelAngle = newBarrelAngle;
-                    socket.emit('playerAim', { barrelAngle: playerBarrelAngle });
-                }
+        const scoreDisplay = document.getElementById('score-display');
 
-                if (shooting) {
-                    const bulletStrength = 10;
-                    const bulletSpeed = 10;
-                    const bulletVelocity = {
-                        x: Math.cos(player.barrelAngle) * bulletSpeed,
-                        y: Math.sin(player.barrelAngle) * bulletSpeed
-                    };
-                    const bulletSpawnX = player.x + Math.cos(player.barrelAngle) * (player.radius + player.bulletRadius);
-                    const bulletSpawnY = player.y + Math.sin(player.barrelAngle) * (player.radius + player.bulletRadius);
+        const minimapCanvas = document.getElementById('minimapCanvas');
 
-                    socket.emit('playerShoot', {
-                        x: bulletSpawnX,
-                        y: bulletSpawnY,
-                        velocity: bulletVelocity,
-                        strength: bulletStrength
-                    });
-                }
-            }
-            
-            if (playerId) {
-                socket.emit('playerInput', keys);
-            }
+        const minimapCtx = minimapCanvas.getContext('2d');
 
-            requestAnimationFrame(animate);
-        }
 
-        animate();
-    </script>
+
+        canvas.width = window.innerWidth;
+
+        canvas.height = window.innerHeight;
+
+
+
+        const keys = {
+
+            w: false,
+
+            a: false,
+
+            s: false,
+
+            d: false
+
+        };
+
+
+
+        const mouse = {
+
+            x: canvas.width / 2,
+
+            y: canvas.height / 2
+
+        };
+
+
+
+        let isMouseDown = false;
+
+        let lastShotTime = 0;
+
+        const cooldown = 500;
+
+        const FADE_DURATION = 1000;
+
+
+
+        const socket = io("https://copemai.onrender.com");
+
+        let myId;
+
+        let players = {};
+
+        let playersLastState = {};
+
+        let bullets = {};
+
+        let cubes = {};
+
+        let pentagons = {};
+
+        let triangles = {};
+
+        let lastUpdateTime = Date.now();
+
+        let chatIsFocused = false;
+
+
+
+        const camera = { x: 0, y: 0 };
+
+        let mapSize;
+
+        let wall;
+
+        let currentDisplayedScore = 0;
+
+        
+
+        // This is a client-side constant, should match server's MAX_HP
+
+        const MAX_HP = 100;
+
+
+
+        function drawWall() {
+
+            if (!wall) return;
+
+            // Draw the lighter purple square.
+
+            ctx.fillStyle = '#9370DB'; 
+
+            ctx.fillRect(wall.x - camera.x, wall.y - camera.y, wall.width, wall.height);
+
+        }
+
+
+
+        function drawPlayer(player) {
+
+            let playerToDraw = player;
+
+            if (player.id !== myId && playersLastState[player.id]) {
+
+                const now = Date.now();
+
+                const latency = now - lastUpdateTime;
+
+                const interpolationFactor = Math.min(1, latency / 100);
+
+
+
+                const lastPos = playersLastState[player.id];
+
+                const currentPos = player;
+
+
+
+                const interpolatedX = lastPos.x + (currentPos.x - lastPos.x) * interpolationFactor;
+
+                const interpolatedY = lastPos.y + (currentPos.y - lastPos.y) * interpolationFactor;
+
+
+
+                playerToDraw = { ...player, x: interpolatedX, y: interpolatedY };
+
+            }
+
+            
+
+            const angle = playerToDraw.barrelAngle;
+
+            const screenX = playerToDraw.x - camera.x;
+
+            const screenY = playerToDraw.y - camera.y;
+
+
+
+            // Draw the player circle
+
+            ctx.fillStyle = playerToDraw.color;
+
+            ctx.beginPath();
+
+            ctx.arc(screenX, screenY, playerToDraw.radius, 0, Math.PI * 2);
+
+            ctx.fill();
+
+
+
+            // Draw the barrel
+
+            ctx.save();
+
+            ctx.translate(screenX, screenY);
+
+            ctx.rotate(angle);
+
+            ctx.fillStyle = '#cccccc';
+
+            ctx.fillRect(playerToDraw.radius - 2, -20 / 2, 20, 20);
+
+            ctx.restore();
+
+
+
+            // Draw username
+
+            ctx.fillStyle = 'white';
+
+            ctx.textAlign = 'center';
+
+            ctx.font = '12px sans-serif';
+
+            ctx.fillText(playerToDraw.username, screenX, screenY - playerToDraw.radius - 20);
+
+
+
+            // Only draw HP bar if player is damaged
+
+            if (playerToDraw.hp < MAX_HP) {
+
+                const barWidth = 40;
+
+                const barHeight = 5;
+
+                const hpPercentage = playerToDraw.hp / MAX_HP; 
+
+                const hpBarX = screenX - barWidth / 2;
+
+                const hpBarY = screenY - playerToDraw.radius - 10;
+
+
+
+                // Background of HP bar
+
+                ctx.fillStyle = 'red';
+
+                ctx.fillRect(hpBarX, hpBarY, barWidth, barHeight);
+
+                
+
+                // Current HP
+
+                ctx.fillStyle = 'green';
+
+                ctx.fillRect(hpBarX, hpBarY, barWidth * hpPercentage, barHeight);
+
+            }
+
+        }
+
+
+
+        function drawBullet(bullet) {
+
+            const now = Date.now();
+
+            let opacity = 1;
+
+            if (bullet.isFading) {
+
+                const elapsedTime = now - bullet.fadeStartTime;
+
+                opacity = 1 - (elapsedTime / FADE_DURATION);
+
+                if (opacity < 0) opacity = 0;
+
+            }
+
+
+
+            const screenX = bullet.x - camera.x;
+
+            const screenY = bullet.y - camera.y;
+
+            
+
+            ctx.globalAlpha = opacity;
+
+            ctx.fillStyle = '#ffffff';
+
+            ctx.beginPath();
+
+            ctx.arc(screenX, screenY, bullet.radius, 0, Math.PI * 2);
+
+            ctx.fill();
+
+            ctx.globalAlpha = 1;
+
+        }
+
+        
+
+        function drawCube(cube) {
+
+            ctx.fillStyle = 'yellow';
+
+            ctx.fillRect(cube.x - camera.x, cube.y - camera.y, cube.size, cube.size);
+
+        }
+
+
+
+        function drawPentagon(pentagon) {
+
+            const screenX = pentagon.x - camera.x;
+
+            const screenY = pentagon.y - camera.y;
+
+            const radius = pentagon.size / 2;
+
+            const maxHp = pentagon.hp;
+
+
+
+            // Draw a darker purple pentagon
+
+            ctx.fillStyle = '#4B0082'; 
+
+            ctx.beginPath();
+
+            
+
+            // Draw a pentagon shape
+
+            for (let i = 0; i < 5; i++) {
+
+                const angle = (Math.PI / 2) + (i * 2 * Math.PI / 5);
+
+                const x = screenX + radius * Math.cos(angle);
+
+                const y = screenY + radius * Math.sin(angle);
+
+                if (i === 0) {
+
+                    ctx.moveTo(x, y);
+
+                } else {
+
+                    ctx.lineTo(x, y);
+
+                }
+
+            }
+
+            ctx.closePath();
+
+            ctx.fill();
+
+
+
+            // Draw HP bar if pentagon is damaged
+
+            if (pentagon.hp < pentagon.strength) {
+
+                const barWidth = pentagon.size;
+
+                const barHeight = 4;
+
+                const hpPercentage = pentagon.hp / pentagon.strength; 
+
+                const hpBarX = screenX - barWidth / 2;
+
+                const hpBarY = screenY - radius - 10;
+
+
+
+                // Background of HP bar
+
+                ctx.fillStyle = 'red';
+
+                ctx.fillRect(hpBarX, hpBarY, barWidth, barHeight);
+
+                
+
+                // Current HP
+
+                ctx.fillStyle = 'green';
+
+                ctx.fillRect(hpBarX, hpBarY, barWidth * hpPercentage, barHeight);
+
+            }
+
+        }
+
+        
+
+        function drawTriangle(triangle) {
+
+            const screenX = triangle.x - camera.x;
+
+            const screenY = triangle.y - camera.y;
+
+            const radius = triangle.size / 2;
+
+            const maxHp = triangle.hp;
+
+
+
+            ctx.fillStyle = 'red'; 
+
+            ctx.beginPath();
+
+            
+
+            // Draw a triangle shape
+
+            ctx.moveTo(screenX, screenY - radius);
+
+            ctx.lineTo(screenX + radius * Math.cos(Math.PI / 6), screenY + radius * Math.sin(Math.PI / 6));
+
+            ctx.lineTo(screenX - radius * Math.cos(Math.PI / 6), screenY + radius * Math.sin(Math.PI / 6));
+
+            ctx.closePath();
+
+            ctx.fill();
+
+
+
+            // Draw HP bar if triangle is damaged
+
+            if (triangle.hp < triangle.strength) {
+
+                const barWidth = triangle.size;
+
+                const barHeight = 4;
+
+                const hpPercentage = triangle.hp / triangle.strength; 
+
+                const hpBarX = screenX - barWidth / 2;
+
+                const hpBarY = screenY - radius - 10;
+
+
+
+                // Background of HP bar
+
+                ctx.fillStyle = 'red';
+
+                ctx.fillRect(hpBarX, hpBarY, barWidth, barHeight);
+
+                
+
+                // Current HP
+
+                ctx.fillStyle = 'green';
+
+                ctx.fillRect(hpBarX, hpBarY, barWidth * hpPercentage, barHeight);
+
+            }
+
+        }
+
+
+
+
+
+        function drawMinimap() {
+
+            if (!players[myId] || !mapSize) return;
+
+
+
+            const mapWidth = minimapCanvas.width;
+
+            const mapHeight = minimapCanvas.height;
+
+            const minimapScale = Math.min(mapWidth / mapSize.width, mapHeight / mapSize.height);
+
+            const drawX = 0;
+
+            const drawY = 0;
+
+
+
+            minimapCtx.clearRect(0, 0, mapWidth, mapHeight);
+
+            
+
+            // Draw map boundary on minimap
+
+            minimapCtx.strokeStyle = 'white';
+
+            minimapCtx.lineWidth = 1;
+
+            minimapCtx.strokeRect(drawX, drawY, mapSize.width * minimapScale, mapSize.height * minimapScale);
+
+
+
+            // Draw the central purple square on minimap
+
+            if (wall) {
+
+                minimapCtx.fillStyle = '#9370DB';
+
+                minimapCtx.fillRect(drawX + wall.x * minimapScale, drawY + wall.y * minimapScale, wall.width * minimapScale, wall.height * minimapScale);
+
+            }
+
+
+
+
+
+            // Draw player on minimap
+
+            const myPlayer = players[myId];
+
+            const minimapPlayerX = drawX + myPlayer.x * minimapScale;
+
+            const minimapPlayerY = drawY + myPlayer.y * minimapScale;
+
+
+
+            minimapCtx.fillStyle = 'cyan';
+
+            minimapCtx.beginPath();
+
+            minimapCtx.arc(minimapPlayerX, minimapPlayerY, 5, 0, Math.PI * 2);
+
+            minimapCtx.fill();
+
+        }
+
+
+
+        function addMessageToChat(message) {
+
+            const p = document.createElement('p');
+
+            p.textContent = message;
+
+            chatMessages.appendChild(p);
+
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        }
+
+
+
+        socket.on('connect', () => {
+
+            console.log('Connected to server with ID:', socket.id);
+
+            socket.emit('setUsername', myUsername);
+
+        });
+
+        
+
+        socket.on('init', (data) => {
+
+            myId = data.playerId;
+
+            players = data.players;
+
+            playersLastState = JSON.parse(JSON.stringify(data.players));
+
+            bullets = data.bullets;
+
+            cubes = data.cubes;
+
+            pentagons = data.pentagons;
+
+            triangles = data.triangles;
+
+            wall = data.wall;
+
+            mapSize = data.mapSize;
+
+            currentDisplayedScore = players[myId] ? players[myId].score : 0;
+
+        });
+
+
+
+        socket.on('playerConnected', (newPlayer) => {
+
+            players[newPlayer.id] = newPlayer;
+
+            playersLastState[newPlayer.id] = newPlayer;
+
+        });
+
+
+
+        socket.on('updatePlayers', (serverPlayers) => {
+
+            playersLastState = JSON.parse(JSON.stringify(players));
+
+            players = serverPlayers;
+
+            lastUpdateTime = Date.now();
+
+        });
+
+
+
+        socket.on('playerDisconnected', (playerId) => {
+
+            delete players[playerId];
+
+            delete playersLastState[playerId];
+
+        });
+
+
+
+        socket.on('newBullet', (bulletData) => {
+
+            bullets[bulletData.id] = bulletData;
+
+        });
+
+
+
+        socket.on('updateBullets', (serverBullets) => {
+
+            bullets = serverBullets;
+
+        });
+
+
+
+        socket.on('updateCubes', (serverCubes) => {
+
+            cubes = serverCubes;
+
+        });
+
+        
+
+        socket.on('updatePentagons', (serverPentagons) => {
+
+            pentagons = serverPentagons;
+
+        });
+
+
+
+        socket.on('updateTriangles', (serverTriangles) => {
+
+            triangles = serverTriangles;
+
+        });
+
+
+
+        socket.on('chatMessage', (message) => {
+
+            addMessageToChat(message);
+
+        });
+
+
+
+        // Listen for the "kill" event and redirect the user
+
+        socket.on('kill', () => {
+
+            window.location.href = 'index.html';
+
+        });
+
+
+
+        function gameLoop() {
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+
+
+            const myPlayer = players[myId];
+
+            if (myPlayer) {
+
+                camera.x = myPlayer.x - canvas.width / 2;
+
+                camera.y = myPlayer.y - canvas.height / 2;
+
+
+
+                socket.emit('playerInput', keys);
+
+                
+
+                myPlayer.barrelAngle = Math.atan2(mouse.y - canvas.height / 2, mouse.x - canvas.width / 2);
+
+
+
+                socket.emit('playerAim', { barrelAngle: myPlayer.barrelAngle });
+
+                
+
+                if (isMouseDown && Date.now() - lastShotTime > cooldown) {
+
+                    lastShotTime = Date.now();
+
+                    const angle = myPlayer.barrelAngle;
+
+                    const bulletStartX = myPlayer.x + Math.cos(angle) * (myPlayer.radius + 20);
+
+                    const bulletStartY = myPlayer.y + Math.sin(angle) * (myPlayer.radius + 20);
+
+                    
+
+                    socket.emit('playerShoot', { 
+
+                        x: bulletStartX, 
+
+                        y: bulletStartY,
+
+                        velocity: {
+
+                            x: Math.cos(angle) * 10,
+
+                            y: Math.sin(angle) * 10
+
+                        },
+
+                        radius: 10,
+
+                        strength: 10 // Bullet strength
+
+                    });
+
+                }
+
+
+
+                // Smooth score animation
+
+                if (myPlayer.score > currentDisplayedScore) {
+
+                    currentDisplayedScore = Math.min(myPlayer.score, currentDisplayedScore + (myPlayer.score - currentDisplayedScore) * 0.15);
+
+                } else {
+
+                    currentDisplayedScore = myPlayer.score;
+
+                }
+
+                scoreDisplay.textContent = `SCORE: ${Math.floor(currentDisplayedScore).toLocaleString()}`;
+
+            }
+
+            
+
+            drawWall();
+
+
+
+            for (const id in cubes) {
+
+                drawCube(cubes[id]);
+
+            }
+
+            
+
+            for (const id in pentagons) {
+
+                drawPentagon(pentagons[id]);
+
+            }
+
+
+
+            for (const id in triangles) {
+
+                drawTriangle(triangles[id]);
+
+            }
+
+
+
+            for (const id in players) {
+
+                drawPlayer(players[id]);
+
+            }
+
+            
+
+            for (const id in bullets) {
+
+                drawBullet(bullets[id]);
+
+            }
+
+            
+
+            drawMinimap();
+
+            
+
+            requestAnimationFrame(gameLoop);
+
+        }
+
+
+
+        window.addEventListener('keydown', (e) => {
+
+            if (e.key === 'Enter') {
+
+                if (chatIsFocused) {
+
+                    const message = chatInput.value.trim();
+
+                    if (message) {
+
+                        socket.emit('chatMessage', message);
+
+                        chatInput.value = '';
+
+                    }
+
+                    chatInput.blur();
+
+                    chatIsFocused = false;
+
+                } else {
+
+                    chatInput.focus();
+
+                    chatIsFocused = true;
+
+                }
+
+            }
+
+            if (chatIsFocused) return;
+
+            if (e.key === 'w') keys.w = true;
+
+            if (e.key === 'a') keys.a = true;
+
+            if (e.key === 's') keys.s = true;
+
+            if (e.key === 'd') keys.d = true;
+
+        });
+
+
+
+        window.addEventListener('keyup', (e) => {
+
+            if (e.key === 'w') keys.w = false;
+
+            if (e.key === 'a') keys.a = false;
+
+            if (e.key === 's') keys.s = false;
+
+            if (e.key === 'd') keys.d = false;
+
+        });
+
+
+
+        window.addEventListener('mousemove', (e) => {
+
+            mouse.x = e.clientX;
+
+            mouse.y = e.clientY;
+
+        });
+
+
+
+        window.addEventListener('mousedown', () => {
+
+            if (!chatIsFocused) isMouseDown = true;
+
+        });
+
+
+
+        window.addEventListener('mouseup', () => {
+
+            isMouseDown = false;
+
+        });
+
+
+
+        chatInput.addEventListener('focus', () => {
+
+            chatIsFocused = true;
+
+        });
+
+
+
+        chatInput.addEventListener('blur', () => {
+
+            chatIsFocused = false;
+
+        });
+
+
+
+        gameLoop();
+
+    </script>
+
 </body>
+
 </html>
