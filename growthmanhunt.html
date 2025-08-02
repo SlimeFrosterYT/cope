@@ -42,11 +42,28 @@
         let lastShotTime = 0;
         const cooldown = 500; // 0.5 seconds in milliseconds
 
-        // --- Multiplayer Logic - Replaces single-player variables ---
         const socket = io("https://copemai.onrender.com");
         let myId;
         let players = {};
         let bullets = {};
+
+        // --- Camera and Static World Objects ---
+        const camera = { x: 0, y: 0 };
+        const wall = {
+            x: 200, 
+            y: 200, 
+            width: 200,
+            height: 200,
+            strokeStyle: '#ffffff',
+            lineWidth: 2
+        };
+
+        function drawWall() {
+            ctx.strokeStyle = wall.strokeStyle;
+            ctx.lineWidth = wall.lineWidth;
+            ctx.strokeRect(wall.x - camera.x, wall.y - camera.y, wall.width, wall.height);
+        }
+        // --- End Camera and Static World Objects ---
 
         // Listeners for server events
         socket.on('connect', () => {
@@ -79,17 +96,19 @@
             bullets = serverBullets;
         });
 
-        // The drawing functions now work on the "players" and "bullets" objects from the server
+        // The drawing functions now use the camera offset
         function drawPlayer(player) {
             const angle = player.barrelAngle;
+            const screenX = player.x - camera.x;
+            const screenY = player.y - camera.y;
 
             ctx.fillStyle = player.color;
             ctx.beginPath();
-            ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+            ctx.arc(screenX, screenY, player.radius, 0, Math.PI * 2);
             ctx.fill();
 
             ctx.save();
-            ctx.translate(player.x, player.y);
+            ctx.translate(screenX, screenY);
             ctx.rotate(angle);
 
             ctx.fillStyle = '#cccccc';
@@ -98,18 +117,23 @@
         }
 
         function drawBullet(bullet) {
+            const screenX = bullet.x - camera.x;
+            const screenY = bullet.y - camera.y;
             ctx.fillStyle = '#ffffff';
             ctx.beginPath();
-            ctx.arc(bullet.x, bullet.y, bullet.radius, 0, Math.PI * 2);
+            ctx.arc(screenX, screenY, bullet.radius, 0, Math.PI * 2);
             ctx.fill();
         }
-        // --- End of Multiplayer Logic ---
 
         function gameLoop() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             const myPlayer = players[myId];
             if (myPlayer) {
+                // Update the camera to center on the local player
+                camera.x = myPlayer.x - canvas.width / 2;
+                camera.y = myPlayer.y - canvas.height / 2;
+
                 // Handle player movement based on local key presses
                 let vx = 0;
                 let vy = 0;
@@ -124,7 +148,7 @@
                 myPlayer.y += vy;
                 
                 // Update barrel angle based on mouse position
-                myPlayer.barrelAngle = Math.atan2(mouse.y - myPlayer.y, mouse.x - myPlayer.x);
+                myPlayer.barrelAngle = Math.atan2(mouse.y - canvas.height / 2, mouse.x - canvas.width / 2);
 
                 // Send the updated state to the server
                 socket.emit('playerMove', { 
@@ -140,7 +164,6 @@
                     const bulletStartX = myPlayer.x + Math.cos(angle) * (myPlayer.radius + 20);
                     const bulletStartY = myPlayer.y + Math.sin(angle) * (myPlayer.radius + 20);
                     
-                    // Tell the server you're shooting
                     socket.emit('playerShoot', { 
                         x: bulletStartX, 
                         y: bulletStartY,
@@ -151,6 +174,9 @@
                     });
                 }
             }
+
+            // Draw the wall first
+            drawWall();
 
             // Draw all players based on the state received from the server
             for (const id in players) {
@@ -195,7 +221,6 @@
             isMouseDown = false;
         });
 
-        // Start the game
         gameLoop();
     </script>
 </body>
