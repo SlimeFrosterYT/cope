@@ -18,18 +18,25 @@ const MAX_CUBES = 10;
 const CUBE_SPAWN_INTERVAL = 5000;
 const PLAYER_COLLISION_DAMAGE = 0.1;
 
+// Define the larger map size
+const mapSize = {
+    width: 2000,
+    height: 2000
+};
+
+// Define the central wall as an obstacle
+const wall = {
+    x: mapSize.width / 2 - 200, 
+    y: mapSize.height / 2 - 200, 
+    width: 400,
+    height: 400,
+};
+
 const players = {};
 const bullets = {};
 const cubes = {};
 let bulletCounter = 0;
 let cubeCounter = 0;
-
-const wall = {
-    x: 200, 
-    y: 200, 
-    width: 200,
-    height: 200,
-};
 
 // Function to check for collision between a rectangle and a circle
 function rectCircleColliding(circle, rect) {
@@ -63,10 +70,10 @@ function spawnCube() {
     let newCubePos = null;
 
     while (attempts < 100 && newCubePos === null) {
-        // Spawn cube randomly within the wall boundaries, with padding
+        // Spawn cube randomly within the map boundaries, with padding
         const padding = 10;
-        const x = Math.random() * (wall.width - CUBE_SIZE - padding * 2) + wall.x + padding;
-        const y = Math.random() * (wall.height - CUBE_SIZE - padding * 2) + wall.y + padding;
+        const x = Math.random() * (mapSize.width - CUBE_SIZE - padding * 2) + padding;
+        const y = Math.random() * (mapSize.height - CUBE_SIZE - padding * 2) + padding;
         
         let collision = false;
         const tempCube = { x: x, y: y, size: CUBE_SIZE, width: CUBE_SIZE, height: CUBE_SIZE };
@@ -77,6 +84,11 @@ function spawnCube() {
                 collision = true;
                 break;
             }
+        }
+
+        // Check for collision with the central wall
+        if (!collision && rectRectColliding(tempCube, wall)) {
+            collision = true;
         }
 
         if (collision) {
@@ -117,6 +129,31 @@ function spawnCube() {
 
 setInterval(spawnCube, CUBE_SPAWN_INTERVAL);
 
+// Function to get a valid player spawn position
+function getPlayerSpawnPosition(playerRadius) {
+    let attempts = 0;
+    let spawnPosition = null;
+
+    while (attempts < 100 && spawnPosition === null) {
+        const x = Math.random() * (mapSize.width - playerRadius * 2) + playerRadius;
+        const y = Math.random() * (mapSize.height - playerRadius * 2) + playerRadius;
+
+        const playerBounds = {
+            x: x - playerRadius,
+            y: y - playerRadius,
+            width: playerRadius * 2,
+            height: playerRadius * 2
+        };
+
+        // Check if the spawn position overlaps with the wall
+        if (!rectRectColliding(playerBounds, wall)) {
+            spawnPosition = { x, y };
+        }
+        attempts++;
+    }
+    return spawnPosition;
+}
+
 io.on('connection', (socket) => {
     console.log('A user connected:', socket.id);
 
@@ -146,14 +183,17 @@ io.on('connection', (socket) => {
             delete players[existingPlayerId];
         }
 
+        const playerRadius = 25;
+        const spawnPos = getPlayerSpawnPosition(playerRadius) || { x: mapSize.width / 4, y: mapSize.height / 4 };
+
         // Create the new player with the new socket ID
         players[socket.id] = {
             socketId: socket.id,
             username: username,
-            x: 500,
-            y: 500,
+            x: spawnPos.x,
+            y: spawnPos.y,
             color: '#ffffff',
-            radius: 25,
+            radius: playerRadius,
             bulletRadius: 10,
             barrelAngle: 0,
             velocity: { x: 0, y: 0 },
@@ -165,7 +205,7 @@ io.on('connection', (socket) => {
             keys: { w: false, a: false, s: false, d: false }
         };
 
-        socket.emit('init', { playerId: socket.id, players, bullets, cubes, wall });
+        socket.emit('init', { playerId: socket.id, players, bullets, cubes, wall, mapSize });
     });
 
     socket.on('playerInput', (keys) => {
@@ -249,11 +289,11 @@ setInterval(() => {
         let nextX = player.x + newVelocityX;
         let nextY = player.y + newVelocityY;
 
-        // Boundary collision logic
-        const minX = wall.x + player.radius;
-        const maxX = wall.x + wall.width - player.radius;
-        const minY = wall.y + player.radius;
-        const maxY = wall.y + wall.height - player.radius;
+        // Boundary collision logic for the new larger map
+        const minX = player.radius;
+        const maxX = mapSize.width - player.radius;
+        const minY = player.radius;
+        const maxY = mapSize.height - player.radius;
         
         if (nextX < minX) {
             nextX = minX;
@@ -276,6 +316,24 @@ setInterval(() => {
         player.velocity.x = newVelocityX;
         player.velocity.y = newVelocityY;
 
+        // Check for collision with the central wall
+        const playerCircle = { x: player.x, y: player.y, radius: player.radius };
+        if (rectCircleColliding(playerCircle, wall)) {
+            // Simple bounce logic
+            const dx = player.x - (wall.x + wall.width / 2);
+            const dy = player.y - (wall.y + wall.height / 2);
+
+            if (Math.abs(dx) > Math.abs(dy)) {
+                // Horizontal collision
+                player.x -= newVelocityX;
+                player.velocity.x *= -1;
+            } else {
+                // Vertical collision
+                player.y -= newVelocityY;
+                player.velocity.y *= -1;
+            }
+        }
+
         // Check for player death after all damage is applied
         if (player.hp <= 0) {
             io.to(player.socketId).emit('kill');
@@ -292,13 +350,23 @@ setInterval(() => {
             bullet.y += bullet.velocity.y;
 
             // Bullet-Wall collision
-            const closestX = Math.max(wall.x, Math.min(bullet.x, wall.x + wall.width));
-            const closestY = Math.max(wall.y, Math.min(bullet.y, wall.y + wall.height));
-            const distToWallX = bullet.x - closestX;
-            const distToWallY = bullet.y - closestY;
-            const distSquaredToWall = (distToWallX * distToWallX) + (distToWallY * distToWallY);
+            if (rectCircleColliding(bullet, wall)) {
+                // Determine which side of the wall was hit and reverse the velocity component
+                const wallMidX = wall.x + wall.width / 2;
+                const wallMidY = wall.y + wall.height / 2;
 
-            if (distSquaredToWall < (bullet.radius * bullet.radius)) {
+                const dx = bullet.x - wallMidX;
+                const dy = bullet.y - wallMidY;
+
+                if (Math.abs(dx) > Math.abs(dy)) {
+                    bullet.velocity.x *= -1; // Bounce horizontally
+                } else {
+                    bullet.velocity.y *= -1; // Bounce vertically
+                }
+            }
+
+            // Bullet-Map Boundary collision
+            if (bullet.x < 0 || bullet.x > mapSize.width || bullet.y < 0 || bullet.y > mapSize.height) {
                 bullet.isFading = true;
                 bullet.fadeStartTime = now;
                 bullet.velocity.x = 0;
