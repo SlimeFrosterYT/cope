@@ -137,11 +137,9 @@
 
         function drawWall() {
             if (!wall) return;
-            ctx.fillStyle = '#666666';
+            // Draw the purple wall, without a white border and no collision
+            ctx.fillStyle = '#800080'; 
             ctx.fillRect(wall.x - camera.x, wall.y - camera.y, wall.width, wall.height);
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(wall.x - camera.x, wall.y - camera.y, wall.width, wall.height);
         }
 
         function drawPlayer(player) {
@@ -183,20 +181,22 @@
             ctx.font = '12px sans-serif';
             ctx.fillText(playerToDraw.username, screenX, screenY - playerToDraw.radius - 20);
 
-            // Draw HP bar
-            const barWidth = 40;
-            const barHeight = 5;
-            const hpPercentage = playerToDraw.hp / 6; 
-            const hpBarX = screenX - barWidth / 2;
-            const hpBarY = screenY - playerToDraw.radius - 10;
+            // Only draw HP bar if player is damaged
+            if (playerToDraw.hp < 6) {
+                const barWidth = 40;
+                const barHeight = 5;
+                const hpPercentage = playerToDraw.hp / 6; 
+                const hpBarX = screenX - barWidth / 2;
+                const hpBarY = screenY - playerToDraw.radius - 10;
 
-            // Background of HP bar
-            ctx.fillStyle = 'red';
-            ctx.fillRect(hpBarX, hpBarY, barWidth, barHeight);
-            
-            // Current HP
-            ctx.fillStyle = 'green';
-            ctx.fillRect(hpBarX, hpBarY, barWidth * hpPercentage, barHeight);
+                // Background of HP bar
+                ctx.fillStyle = 'red';
+                ctx.fillRect(hpBarX, hpBarY, barWidth, barHeight);
+                
+                // Current HP
+                ctx.fillStyle = 'green';
+                ctx.fillRect(hpBarX, hpBarY, barWidth * hpPercentage, barHeight);
+            }
         }
 
         function drawBullet(bullet) {
@@ -251,7 +251,7 @@
             minimapCtx.strokeRect(drawX, drawY, mapSize.width * minimapScale, mapSize.height * minimapScale);
 
             // Draw wall on minimap
-            minimapCtx.fillStyle = '#666666';
+            minimapCtx.fillStyle = '#800080';
             minimapCtx.fillRect(drawX + wall.x * minimapScale, drawY + wall.y * minimapScale, wall.width * minimapScale, wall.height * minimapScale);
 
             // Draw player on minimap
@@ -403,10 +403,11 @@
                 }
             }
             if (chatIsFocused) return;
+            // FIX: Correctly set key states
             if (e.key === 'w') keys.w = true;
             if (e.key === 'a') keys.a = true;
-            if (e.key === 's') keys.s = false;
-            if (e.key === 'd') keys.d = false;
+            if (e.key === 's') keys.s = true;
+            if (e.key === 'd') keys.d = true;
         });
 
         window.addEventListener('keyup', (e) => {
