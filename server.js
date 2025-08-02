@@ -13,10 +13,14 @@ app.use(express.static(__dirname));
 const port = process.env.PORT || 3000;
 const FADE_DURATION = 1000;
 const BULLET_KNOCKBACK_FORCE = 0.5;
+const CUBE_SCORE = 10;
+const CUBE_SIZE = 20;
 
 const players = {};
 const bullets = {};
+const cubes = {};
 let bulletCounter = 0;
+let cubeCounter = 0;
 
 const wall = {
     x: 200, 
@@ -24,6 +28,22 @@ const wall = {
     width: 200,
     height: 200,
 };
+
+// Function to spawn a new cube
+function spawnCube() {
+    const x = Math.random() * (wall.width - CUBE_SIZE) + wall.x;
+    const y = Math.random() * (wall.height - CUBE_SIZE) + wall.y;
+    cubes[cubeCounter] = {
+        id: cubeCounter,
+        x: x,
+        y: y,
+        size: CUBE_SIZE
+    };
+    cubeCounter++;
+}
+
+// Spawn a new cube every 5 seconds
+setInterval(spawnCube, 5000);
 
 io.on('connection', (socket) => {
     console.log('A user connected:', socket.id);
@@ -46,7 +66,7 @@ io.on('connection', (socket) => {
         keys: { w: false, a: false, s: false, d: false }
     };
 
-    socket.emit('init', { playerId: socket.id, players, bullets, wall });
+    socket.emit('init', { playerId: socket.id, players, bullets, cubes, wall });
     // Do not broadcast playerConnected messages
     // socket.broadcast.emit('playerConnected', players[socket.id]);
 
@@ -94,7 +114,7 @@ io.on('connection', (socket) => {
             x: data.x,
             y: data.y,
             velocity: data.velocity,
-            radius: 10, // bullet radius fixed to 10
+            radius: 10,
             isFading: false,
             fadeStartTime: 0
         };
@@ -151,6 +171,7 @@ setInterval(() => {
             bullet.x += bullet.velocity.x;
             bullet.y += bullet.velocity.y;
 
+            // Bullet-Wall collision
             const closestX = Math.max(wall.x, Math.min(bullet.x, wall.x + wall.width));
             const closestY = Math.max(wall.y, Math.min(bullet.y, wall.y + wall.height));
             const distToWallX = bullet.x - closestX;
@@ -164,6 +185,7 @@ setInterval(() => {
                 bullet.velocity.y = 0;
             }
 
+            // Bullet-Player collision
             for (const playerId in players) {
                 const player = players[playerId];
                 const distToPlayerX = bullet.x - player.x;
@@ -182,7 +204,7 @@ setInterval(() => {
                     if (player.hp <= 0) {
                         if (killer) {
                             killer.score += player.score;
-                            io.emit('chatMessage', `${killer.username} killed ${player.username} and gained ${player.score} score!`);
+                            // No chat message for kills as per user request
                         }
                         
                         // Emit 'kill' event to the dead client to trigger redirection
@@ -190,13 +212,33 @@ setInterval(() => {
                         
                         delete players[playerId];
                         // Do not broadcast playerDisconnected messages
-                        // io.emit('playerDisconnected', playerId);
                     }
 
                     bullet.isFading = true;
                     bullet.fadeStartTime = now;
                     bullet.velocity.x = 0;
                     bullet.velocity.y = 0;
+                }
+            }
+
+            // Bullet-Cube collision
+            for (const cubeId in cubes) {
+                const cube = cubes[cubeId];
+                const closestX = Math.max(cube.x, Math.min(bullet.x, cube.x + cube.size));
+                const closestY = Math.max(cube.y, Math.min(bullet.y, cube.y + cube.size));
+                
+                const distToCubeX = bullet.x - closestX;
+                const distToCubeY = bullet.y - closestY;
+                const distSquaredToCube = (distToCubeX * distToCubeX) + (distToCubeY * distToCubeY);
+                
+                if (distSquaredToCube < (bullet.radius * bullet.radius)) {
+                    const killer = players[bullet.ownerId];
+                    if (killer) {
+                        killer.score += CUBE_SCORE;
+                    }
+                    
+                    delete cubes[cubeId];
+                    bulletsToRemove.push(bulletId);
                 }
             }
         }
@@ -211,6 +253,7 @@ setInterval(() => {
     });
 
     io.emit('updateBullets', bullets);
+    io.emit('updateCubes', cubes);
 }, 1000 / 60);
 
 app.get('/', (req, res) => {
