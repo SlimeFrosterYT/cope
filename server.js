@@ -35,7 +35,8 @@ const BULLET_STRENGTH = 10;
 const BULLET_SPEED = 10;
 const BULLET_RADIUS = 10;
 const CHAT_MESSAGE_LIFETIME = 5000; // 5 seconds for chat messages
-
+const BARREL_LENGTH = 30;
+const BARREL_WIDTH = 10;
 
 // Define the larger map size as a square
 const mapSize = {
@@ -108,6 +109,15 @@ function spawnCube() {
         }
         
         if (collision) {
+            attempts++;
+            continue;
+        }
+
+        // Check collision with wall
+        if (rectRectColliding(tempCube, wall)) {
+            collision = true;
+        }
+        if(collision) {
             attempts++;
             continue;
         }
@@ -226,6 +236,15 @@ function spawnTriangle() {
             continue;
         }
 
+        // Check collision with wall
+        if (rectRectColliding(tempTriangle, wall)) {
+            collision = true;
+        }
+        if(collision) {
+            attempts++;
+            continue;
+        }
+
         for (const playerId in players) {
             const player = players[playerId];
             const playerCircle = { x: player.x, y: player.y, radius: player.radius };
@@ -269,6 +288,13 @@ function getPlayerSpawnPosition(playerRadius) {
     while (attempts < 100 && spawnPosition === null) {
         const x = Math.random() * (mapSize.width - playerRadius * 2) + playerRadius;
         const y = Math.random() * (mapSize.height - playerRadius * 2) + playerRadius;
+        
+        // Check collision with wall
+        const tempPlayerCircle = { x: x, y: y, radius: playerRadius };
+        if (rectCircleColliding(tempPlayerCircle, wall)) {
+            attempts++;
+            continue;
+        }
 
         spawnPosition = { x, y };
         attempts++;
@@ -281,29 +307,11 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
         console.log('A user disconnected:', socket.id);
-        for (const playerId in players) {
-            if (players[playerId].socketId === socket.id) {
-                delete players[playerId];
-                break;
-            }
-        }
+        delete players[socket.id];
     });
 
     socket.on('setUsername', (username) => {
-        // Assign "Unnamed" if username is not provided
         const finalUsername = username ? username : "Unnamed";
-
-        let existingPlayerId = null;
-        for (const playerId in players) {
-            if (players[playerId].username === finalUsername) {
-                existingPlayerId = playerId;
-                break;
-            }
-        }
-        
-        if (existingPlayerId) {
-            delete players[existingPlayerId];
-        }
 
         const playerRadius = 25;
         const spawnPos = getPlayerSpawnPosition(playerRadius) || { x: mapSize.width / 4, y: mapSize.height / 4 };
@@ -322,14 +330,14 @@ io.on('connection', (socket) => {
             friction: 0.85,
             maxSpeed: 4.5,
             hp: MAX_HP,
-            score: 26263,
+            score: 0, // Reset score on new player connection
             keys: { w: false, a: false, s: false, d: false },
             lastDamageTime: 0,
             lastShotTime: 0,
             chatMessages: [] // New array to store chat messages
         };
 
-        socket.emit('init', { playerId: socket.id, players, bullets, cubes, pentagons, triangles, wall, mapSize });
+        socket.emit('init', { playerId: socket.id, players, bullets, cubes, pentagons, triangles, wall, mapSize, BARREL_LENGTH, BARREL_WIDTH });
     });
 
     socket.on('playerInput', (keys) => {
@@ -434,6 +442,30 @@ setInterval(() => {
         let nextX = player.x + newVelocityX;
         let nextY = player.y + newVelocityY;
 
+        // Prevent player from entering the wall
+        const tempPlayer = { x: nextX, y: nextY, radius: player.radius };
+        const playerRect = { x: tempPlayer.x - tempPlayer.radius, y: tempPlayer.y - tempPlayer.radius, width: tempPlayer.radius * 2, height: tempPlayer.radius * 2 };
+        if (rectRectColliding(playerRect, wall)) {
+            // Player is colliding with the wall, so stop movement
+            // Find which side they hit and adjust
+            const overlapX = Math.min(playerRect.x + playerRect.width - wall.x, wall.x + wall.width - playerRect.x);
+            const overlapY = Math.min(playerRect.y + playerRect.height - wall.y, wall.y + wall.height - playerRect.y);
+            
+            if (overlapX < overlapY) {
+                if (playerRect.x < wall.x) { // hit from left
+                    nextX = wall.x - player.radius;
+                } else { // hit from right
+                    nextX = wall.x + wall.width + player.radius;
+                }
+            } else {
+                if (playerRect.y < wall.y) { // hit from top
+                    nextY = wall.y - player.radius;
+                } else { // hit from bottom
+                    nextY = wall.y + wall.height + player.radius;
+                }
+            }
+        }
+
         player.x = Math.max(player.radius, Math.min(nextX, mapSize.width - player.radius));
         player.y = Math.max(player.radius, Math.min(nextY, mapSize.height - player.radius));
 
@@ -466,6 +498,15 @@ setInterval(() => {
 
             // Bullet-Map Boundary collision
             if (bullet.x < 0 || bullet.x > mapSize.width || bullet.y < 0 || bullet.y > mapSize.height) {
+                bullet.isFading = true;
+                bullet.fadeStartTime = now;
+                bullet.velocity.x = 0;
+                bullet.velocity.y = 0;
+            }
+
+            // Bullet-Wall collision
+            const bulletRect = { x: bullet.x - bullet.radius, y: bullet.y - bullet.radius, width: bullet.radius * 2, height: bullet.radius * 2 };
+            if (rectRectColliding(bulletRect, wall)) {
                 bullet.isFading = true;
                 bullet.fadeStartTime = now;
                 bullet.velocity.x = 0;
