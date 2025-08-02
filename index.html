@@ -25,6 +25,17 @@
             color: #ffffff;
         }
 
+        #username-input {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid #d8d8d8;
+            color: #ffffff;
+            padding: 10px;
+            font-size: 16px;
+            letter-spacing: 0.1em;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
         a {
             color: #ffffff;
             text-decoration: none;
@@ -57,6 +68,16 @@
 <body>
     <div class="background-lines"></div>
     <h1>COPE</h1>
-    <a href="growthmanhunt.html">PLAY</a>
+    <input type="text" id="username-input" placeholder="Enter your username">
+    <a href="#" id="play-button">PLAY</a>
+
+    <script>
+        document.getElementById('play-button').addEventListener('click', (e) => {
+            const usernameInput = document.getElementById('username-input');
+            const username = usernameInput.value.trim() || `Player${Math.floor(Math.random() * 1000)}`;
+            const playButton = document.getElementById('play-button');
+            playButton.href = `growthmanhunt.html?username=${encodeURIComponent(username)}`;
+        });
+    </script>
 </body>
 </html>
