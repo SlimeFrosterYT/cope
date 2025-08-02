@@ -53,7 +53,6 @@
         });
         window.dispatchEvent(new Event('resize'));
 
-        // A very basic username prompt for joining the game
         const username = prompt("Enter your username:");
         if (username) {
             socket.emit('setUsername', username);
@@ -99,8 +98,7 @@
         });
         
         socket.on('kill', () => {
-            window.alert('You were killed!');
-            // Re-prompt for username to re-join
+            alert('You were killed!');
             const newUsername = prompt("You were killed! Enter your username to re-join:");
             if (newUsername) {
                 socket.emit('setUsername', newUsername);
