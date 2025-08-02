@@ -14,39 +14,46 @@ const port = process.env.PORT || 3000;
 const FADE_DURATION = 1000;
 const BULLET_KNOCKBACK_FORCE = 0.5;
 const CUBE_SIZE = 20;
-const PENTAGON_SIZE = 100; // Increased pentagon size
+const TRIANGLE_SIZE = 40;
+const PENTAGON_SIZE = 50; 
 const MAX_CUBES = 10;
 const MAX_PENTAGONS = 3;
+const MAX_TRIANGLES = 5;
 const CUBE_SPAWN_INTERVAL = 5000;
 const PENTAGON_SPAWN_INTERVAL = 8000;
+const TRIANGLE_SPAWN_INTERVAL = 6000;
 const PLAYER_COLLISION_DAMAGE = 1; 
 const MAX_HP = 100;
-const HP_REGEN_DELAY = 20000; // 20 seconds delay before regen starts
-const HP_REGEN_RATE = 0.05; // Slower regen rate
+const HP_REGEN_DELAY = 20000;
+const HP_REGEN_RATE = 0.05;
 const CUBE_SCORE = 5;
 const PENTAGON_SCORE = 20;
+const TRIANGLE_SCORE = 15;
+
 
 // Define the larger map size as a square
 const mapSize = {
-    width: 4000, // Increased map size
-    height: 4000 // Increased map size
+    width: 4000,
+    height: 4000
 };
 
 // Define the central wall (now a special spawn zone)
 const wall = {
-    x: mapSize.width / 2 - 400, // Increased wall size
-    y: mapSize.height / 2 - 400, // Increased wall size
-    width: 800, // Increased wall size
-    height: 800, // Increased wall size
+    x: mapSize.width / 2 - 400,
+    y: mapSize.height / 2 - 400,
+    width: 800,
+    height: 800,
 };
 
 const players = {};
 const bullets = {};
 const cubes = {};
 const pentagons = {};
+const triangles = {};
 let bulletCounter = 0;
 let cubeCounter = 0;
 let pentagonCounter = 0;
+let triangleCounter = 0;
 
 // Function to check for collision between a rectangle and a circle
 function rectCircleColliding(circle, rect) {
@@ -120,7 +127,7 @@ function spawnCube() {
             x: newCubePos.x,
             y: newCubePos.y,
             size: CUBE_SIZE,
-            strength: 5, // Cube strength for bullet collision
+            strength: 5,
             score: CUBE_SCORE,
             width: CUBE_SIZE,
             height: CUBE_SIZE
@@ -176,17 +183,77 @@ function spawnPentagon() {
             x: newPentagonPos.x,
             y: newPentagonPos.y,
             size: PENTAGON_SIZE,
+            strength: 50,
             score: PENTAGON_SCORE,
             width: PENTAGON_SIZE,
             height: PENTAGON_SIZE,
-            hp: PENTAGON_SCORE // Pentagons have health equal to their score
+            hp: 50
         };
         pentagonCounter++;
     }
 }
 
+// Function to spawn a new red triangle
+function spawnTriangle() {
+    if (Object.keys(triangles).length >= MAX_TRIANGLES) return;
+
+    let attempts = 0;
+    let newTrianglePos = null;
+
+    while (attempts < 100 && newTrianglePos === null) {
+        const padding = 10;
+        const x = Math.random() * (mapSize.width - TRIANGLE_SIZE - padding * 2) + padding;
+        const y = Math.random() * (mapSize.height - TRIANGLE_SIZE - padding * 2) + padding;
+        
+        let collision = false;
+        const tempTriangle = { x: x, y: y, size: TRIANGLE_SIZE, width: TRIANGLE_SIZE, height: TRIANGLE_SIZE };
+
+        for (const triangleId in triangles) {
+            if (rectRectColliding(tempTriangle, triangles[triangleId])) {
+                collision = true;
+                break;
+            }
+        }
+        
+        if (collision) {
+            attempts++;
+            continue;
+        }
+
+        for (const playerId in players) {
+            const player = players[playerId];
+            const playerCircle = { x: player.x, y: player.y, radius: player.radius };
+            if (rectCircleColliding(playerCircle, tempTriangle)) {
+                collision = true;
+                break;
+            }
+        }
+
+        if (!collision) {
+            newTrianglePos = { x, y };
+        }
+        attempts++;
+    }
+
+    if (newTrianglePos) {
+        triangles[triangleCounter] = {
+            id: triangleCounter,
+            x: newTrianglePos.x,
+            y: newTrianglePos.y,
+            size: TRIANGLE_SIZE,
+            strength: 15,
+            score: TRIANGLE_SCORE,
+            width: TRIANGLE_SIZE,
+            height: TRIANGLE_SIZE,
+            hp: 15
+        };
+        triangleCounter++;
+    }
+}
+
 setInterval(spawnCube, CUBE_SPAWN_INTERVAL);
 setInterval(spawnPentagon, PENTAGON_SPAWN_INTERVAL);
+setInterval(spawnTriangle, TRIANGLE_SPAWN_INTERVAL);
 
 // Function to get a valid player spawn position
 function getPlayerSpawnPosition(playerRadius) {
@@ -246,12 +313,12 @@ io.on('connection', (socket) => {
             friction: 0.85,
             maxSpeed: 4.5,
             hp: MAX_HP,
-            score: 26263, // Player starts with this score
+            score: 26263,
             keys: { w: false, a: false, s: false, d: false },
             lastDamageTime: 0 
         };
 
-        socket.emit('init', { playerId: socket.id, players, bullets, cubes, pentagons, wall, mapSize });
+        socket.emit('init', { playerId: socket.id, players, bullets, cubes, pentagons, triangles, wall, mapSize });
     });
 
     socket.on('playerInput', (keys) => {
@@ -286,7 +353,7 @@ io.on('connection', (socket) => {
             radius: 10,
             isFading: false,
             fadeStartTime: 0,
-            strength: data.strength // Bullet strength
+            strength: data.strength
         };
         io.emit('newBullet', bullets[newBulletId]);
     });
@@ -377,13 +444,15 @@ setInterval(() => {
             // Bullet-Player collision
             for (const playerId in players) {
                 const player = players[playerId];
+                if (bullet.ownerId === player.socketId) continue;
+                
                 const distToPlayerX = bullet.x - player.x;
                 const distToPlayerY = bullet.y - player.y;
                 const distSquaredToPlayer = (distToPlayerX * distToPlayerX) + (distToPlayerY * distToPlayerY);
 
-                if (distSquaredToPlayer < (player.radius * player.radius) && bullet.ownerId !== player.socketId) {
+                if (distSquaredToPlayer < (player.radius * player.radius)) {
                     player.hp -= bullet.strength;
-                    player.lastDamageTime = now; // Reset regen timer on damage
+                    player.lastDamageTime = now;
 
                     const angle = Math.atan2(distToPlayerY, distToPlayerX);
                     player.velocity.x += Math.cos(angle) * BULLET_KNOCKBACK_FORCE;
@@ -405,7 +474,7 @@ setInterval(() => {
                 }
             }
 
-            // Bullet-Cube collision (now respects strength)
+            // Bullet-Cube collision
             for (const cubeId in cubes) {
                 const cube = cubes[cubeId];
                 const closestX = Math.max(cube.x, Math.min(bullet.x, cube.x + cube.size));
@@ -416,24 +485,23 @@ setInterval(() => {
                 const distSquaredToCube = (distToCubeX * distToCubeX) + (distToCubeY * distToCubeY);
                 
                 if (distSquaredToCube < (bullet.radius * bullet.radius)) {
-                    if (bullet.strength >= cube.strength) {
-                        bullet.strength -= cube.strength;
+                    // Reduce bullet strength
+                    bullet.strength -= cube.strength;
 
-                        const killer = players[bullet.ownerId];
-                        if (killer) {
-                            killer.score += cube.score;
-                        }
-                        
-                        delete cubes[cubeId];
+                    const killer = players[bullet.ownerId];
+                    if (killer) {
+                        killer.score += cube.score;
                     }
-
+                    
+                    delete cubes[cubeId];
+                
                     if (bullet.strength <= 0) {
                         bulletsToRemove.add(bulletId);
                     }
                 }
             }
             
-            // Bullet-Pentagon collision (Pentagons have health)
+            // Bullet-Pentagon collision
             for (const pentagonId in pentagons) {
                 const pentagon = pentagons[pentagonId];
                 const closestX = Math.max(pentagon.x, Math.min(bullet.x, pentagon.x + pentagon.size));
@@ -445,7 +513,6 @@ setInterval(() => {
                 
                 if (distSquaredToPentagon < (bullet.radius * bullet.radius)) {
                     pentagon.hp -= bullet.strength;
-                    bulletsToRemove.add(bulletId);
                     
                     if (pentagon.hp <= 0) {
                         const killer = players[bullet.ownerId];
@@ -455,6 +522,32 @@ setInterval(() => {
                         
                         delete pentagons[pentagonId];
                     }
+                    bulletsToRemove.add(bulletId);
+                }
+            }
+
+            // Bullet-Triangle collision
+            for (const triangleId in triangles) {
+                const triangle = triangles[triangleId];
+                const closestX = Math.max(triangle.x, Math.min(bullet.x, triangle.x + triangle.size));
+                const closestY = Math.max(triangle.y, Math.min(bullet.y, triangle.y + triangle.size));
+                
+                const distToTriangleX = bullet.x - closestX;
+                const distToTriangleY = bullet.y - closestY;
+                const distSquaredToTriangle = (distToTriangleX * distToTriangleX) + (distToTriangleY * distToTriangleY);
+                
+                if (distSquaredToTriangle < (bullet.radius * bullet.radius)) {
+                    triangle.hp -= bullet.strength;
+                    
+                    if (triangle.hp <= 0) {
+                        const killer = players[bullet.ownerId];
+                        if (killer) {
+                            killer.score += triangle.score;
+                        }
+                        
+                        delete triangles[triangleId];
+                    }
+                    bulletsToRemove.add(bulletId);
                 }
             }
         }
@@ -471,6 +564,7 @@ setInterval(() => {
     io.emit('updateBullets', bullets);
     io.emit('updateCubes', cubes);
     io.emit('updatePentagons', pentagons);
+    io.emit('updateTriangles', triangles);
 }, 1000 / 60);
 
 app.get('/', (req, res) => {
