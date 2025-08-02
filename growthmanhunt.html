@@ -51,6 +51,19 @@
             font-weight: bold;
             color: white;
         }
+        #minimap-container {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 2px solid white;
+            border-radius: 5px;
+            padding: 5px;
+        }
+        #minimapCanvas {
+            width: 200px;
+            height: 200px;
+        }
     </style>
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 </head>
@@ -63,6 +76,10 @@
     </div>
 
     <div id="score-display">SCORE: 26,263</div>
+    
+    <div id="minimap-container">
+        <canvas id="minimapCanvas"></canvas>
+    </div>
 
     <script>
         const canvas = document.getElementById('gameCanvas');
@@ -70,6 +87,8 @@
         const chatInput = document.getElementById('chat-input');
         const chatMessages = document.getElementById('chat-messages');
         const scoreDisplay = document.getElementById('score-display');
+        const minimapCanvas = document.getElementById('minimapCanvas');
+        const minimapCtx = minimapCanvas.getContext('2d');
 
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
@@ -96,13 +115,14 @@
         let players = {};
         let playersLastState = {};
         let bullets = {};
-        let cubes = {}; // New object for cubes
+        let cubes = {};
         let lastUpdateTime = Date.now();
         let chatIsFocused = false;
 
         const camera = { x: 0, y: 0 };
         let wall;
         let myUsername;
+        let currentDisplayedScore = 26263;
 
         const urlParams = new URLSearchParams(window.location.search);
         myUsername = urlParams.get('username') || `Player${Math.floor(Math.random() * 1000)}`;
@@ -194,6 +214,43 @@
             ctx.fillRect(cube.x - camera.x, cube.y - camera.y, cube.size, cube.size);
         }
 
+        function drawMinimap() {
+            if (!wall || !players[myId]) return;
+
+            const mapWidth = minimapCanvas.width;
+            const mapHeight = minimapCanvas.height;
+            const wallRatio = wall.width / wall.height;
+            let minimapScale;
+            let drawX, drawY;
+
+            if (wallRatio > 1) { // Wider than tall
+                minimapScale = mapWidth / wall.width;
+                drawX = 0;
+                drawY = (mapHeight - wall.height * minimapScale) / 2;
+            } else { // Taller than wide
+                minimapScale = mapHeight / wall.height;
+                drawX = (mapWidth - wall.width * minimapScale) / 2;
+                drawY = 0;
+            }
+
+            minimapCtx.clearRect(0, 0, mapWidth, mapHeight);
+            
+            // Draw wall boundary on minimap
+            minimapCtx.strokeStyle = 'white';
+            minimapCtx.lineWidth = 1;
+            minimapCtx.strokeRect(drawX, drawY, wall.width * minimapScale, wall.height * minimapScale);
+
+            // Draw player on minimap
+            const myPlayer = players[myId];
+            const minimapPlayerX = drawX + (myPlayer.x - wall.x) * minimapScale;
+            const minimapPlayerY = drawY + (myPlayer.y - wall.y) * minimapScale;
+
+            minimapCtx.fillStyle = 'cyan';
+            minimapCtx.beginPath();
+            minimapCtx.arc(minimapPlayerX, minimapPlayerY, 5, 0, Math.PI * 2);
+            minimapCtx.fill();
+        }
+
         function addMessageToChat(message) {
             const p = document.createElement('p');
             p.textContent = message;
@@ -211,8 +268,9 @@
             players = data.players;
             playersLastState = JSON.parse(JSON.stringify(data.players));
             bullets = data.bullets;
-            cubes = data.cubes; // Get initial cubes
+            cubes = data.cubes;
             wall = data.wall;
+            currentDisplayedScore = players[myId] ? players[myId].score : 26263;
         });
 
         socket.on('playerConnected', (newPlayer) => {
@@ -224,9 +282,6 @@
             playersLastState = JSON.parse(JSON.stringify(players));
             players = serverPlayers;
             lastUpdateTime = Date.now();
-            if (players[myId]) {
-                scoreDisplay.textContent = `SCORE: ${players[myId].score.toLocaleString()}`;
-            }
         });
 
         socket.on('playerDisconnected', (playerId) => {
@@ -285,11 +340,18 @@
                         radius: 10
                     });
                 }
+
+                // Smooth score animation
+                if (myPlayer.score > currentDisplayedScore) {
+                    currentDisplayedScore = Math.min(myPlayer.score, currentDisplayedScore + (myPlayer.score - currentDisplayedScore) * 0.15);
+                } else {
+                    currentDisplayedScore = myPlayer.score;
+                }
+                scoreDisplay.textContent = `SCORE: ${Math.floor(currentDisplayedScore).toLocaleString()}`;
             }
 
             drawWall();
 
-            // Draw cubes first, so players and bullets are on top
             for (const id in cubes) {
                 drawCube(cubes[id]);
             }
@@ -301,6 +363,8 @@
             for (const id in bullets) {
                 drawBullet(bullets[id]);
             }
+            
+            drawMinimap();
             
             requestAnimationFrame(gameLoop);
         }
