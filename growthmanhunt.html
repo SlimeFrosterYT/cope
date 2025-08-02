@@ -4,491 +4,437 @@
 
 <head>
 
-    <meta charset="UTF-8">
+    <meta charset="UTF-8">
 
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>Growth Manhunt</title>
+    <title>Growth Manhunt</title>
 
-    <style>
+    <style>
 
-        body {
+        body {
 
-            margin: 0;
+            margin: 0;
 
-            overflow: hidden;
+            overflow: hidden;
 
-            background-color: #010409;
+            background-color: #010409;
 
-        }
+        }
 
-        canvas {
+        canvas {
 
-            display: block;
+            display: block;
 
-            width: 100vw;
+            width: 100vw;
 
-            height: 100vh;
+            height: 100vh;
 
-        }
+        }
 
-    </style>
+    </style>
 
 </head>
 
 <body>
 
-    <canvas id="gameCanvas"></canvas>
+    <canvas id="gameCanvas"></canvas>
 
 
+    <script src="/socket.io/socket.io.js"></script>
 
-    <script src="/socket.io/socket.io.js"></script>
+    <script>
 
-    <script>
+        const canvas = document.getElementById('gameCanvas');
 
-        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
 
-        const ctx = canvas.getContext('2d');
+        const socket = io();
 
-        const socket = io();
 
+        let playerId = null;
 
+        let players = {};
 
-        let playerId = null;
+        let bullets = {};
 
-        let players = {};
+        let cubes = {};
 
-        let bullets = {};
+        let pentagons = {};
 
-        let cubes = {};
+        let triangles = {};
 
-        let pentagons = {};
+        let wall = {};
 
-        let triangles = {};
+        let mapSize = {};
 
-        let wall = {};
 
-        let mapSize = {};
+        const keys = { w: false, a: false, s: false, d: false };
 
+        let mouse = { x: 0, y: 0 };
 
+        let playerBarrelAngle = 0;
 
-        const keys = { w: false, a: false, s: false, d: false };
+        let shooting = false;
 
-        let mouse = { x: 0, y: 0 };
+        let lastShotTime = 0; // Local shooting cooldown
 
-        let playerBarrelAngle = 0;
+        const shootCooldown = 200; // Match server-side cooldown
 
-        let shooting = false;
 
+        let camera = { x: 0, y: 0 };
 
+        
+        window.addEventListener('resize', () => {
 
-        let camera = { x: 0, y: 0 };
+            canvas.width = window.innerWidth;
 
-        
+            canvas.height = window.innerHeight;
 
-        window.addEventListener('resize', () => {
+            if (playerId && players[playerId]) {
 
-            canvas.width = window.innerWidth;
+                const player = players[playerId];
 
-            canvas.height = window.innerHeight;
+                camera.x = player.x - canvas.width / 2;
 
-            if (playerId && players[playerId]) {
+                camera.y = player.y - canvas.height / 2;
 
-                const player = players[playerId];
+            }
 
-                camera.x = player.x - canvas.width / 2;
+        });
 
-                camera.y = player.y - canvas.height / 2;
+        window.dispatchEvent(new Event('resize'));
 
-            }
 
-        });
+        socket.on('init', (data) => {
 
-        window.dispatchEvent(new Event('resize'));
+            playerId = data.playerId;
 
+            players = data.players;
 
+            bullets = data.bullets;
 
+            cubes = data.cubes;
 
+            pentagons = data.pentagons;
 
-        socket.on('init', (data) => {
+            triangles = data.triangles;
 
-            playerId = data.playerId;
+            wall = data.wall;
 
-            players = data.players;
+            mapSize = data.mapSize;
 
-            bullets = data.bullets;
 
-            cubes = data.cubes;
+            if (players[playerId]) {
 
-            pentagons = data.pentagons;
+                camera.x = players[playerId].x - canvas.width / 2;
 
-            triangles = data.triangles;
+                camera.y = players[playerId].y - canvas.height / 2;
 
-            wall = data.wall;
+            }
 
-            mapSize = data.mapSize;
+        });
 
 
+        socket.on('updatePlayers', (serverPlayers) => {
 
-            if (players[playerId]) {
+            players = serverPlayers;
 
-                camera.x = players[playerId].x - canvas.width / 2;
+        });
 
-                camera.y = players[playerId].y - canvas.height / 2;
 
-            }
+        socket.on('updateBullets', (serverBullets) => {
 
-        });
+            bullets = serverBullets;
 
+        });
 
 
-        socket.on('updatePlayers', (serverPlayers) => {
+        socket.on('updateCubes', (serverCubes) => {
 
-            players = serverPlayers;
+            cubes = serverCubes;
 
-        });
+        });
 
 
+        socket.on('updatePentagons', (serverPentagons) => {
 
-        socket.on('updateBullets', (serverBullets) => {
+            pentagons = serverPentagons;
 
-            bullets = serverBullets;
+        });
 
-        });
 
+        socket.on('updateTriangles', (serverTriangles) => {
 
+            triangles = serverTriangles;
 
-        socket.on('updateCubes', (serverCubes) => {
+        });
 
-            cubes = serverCubes;
+        
+        socket.on('kill', () => {
 
-        });
+            alert('You were killed!');
 
+            const newUsername = prompt("You were killed! Enter your username to re-join:");
 
+            if (newUsername) {
 
-        socket.on('updatePentagons', (serverPentagons) => {
+                socket.emit('setUsername', newUsername);
 
-            pentagons = serverPentagons;
+            }
 
-        });
+        });
 
 
+        document.addEventListener('keydown', (e) => {
 
-        socket.on('updateTriangles', (serverTriangles) => {
+            if (e.key === 'w') keys.w = true;
 
-            triangles = serverTriangles;
+            if (e.key === 'a') keys.a = true;
 
-        });
+            if (e.key === 's') keys.s = true;
 
-        
+            if (e.key === 'd') keys.d = true;
 
-        socket.on('kill', () => {
+        });
 
-            alert('You were killed!');
 
-            const newUsername = prompt("You were killed! Enter your username to re-join:");
+        document.addEventListener('keyup', (e) => {
 
-            if (newUsername) {
+            if (e.key === 'w') keys.w = false;
 
-                socket.emit('setUsername', newUsername);
+            if (e.key === 'a') keys.a = false;
 
-            }
+            if (e.key === 's') keys.s = false;
 
-        });
+            if (e.key === 'd') keys.d = false;
 
+        });
 
 
-        document.addEventListener('keydown', (e) => {
+        canvas.addEventListener('mousemove', (e) => {
 
-            if (e.key === 'w') keys.w = true;
+            mouse.x = e.clientX;
 
-            if (e.key === 'a') keys.a = true;
+            mouse.y = e.clientY;
 
-            if (e.key === 's') keys.s = true;
+        });
 
-            if (e.key === 'd') keys.d = true;
 
-        });
+        canvas.addEventListener('mousedown', (e) => {
 
+            if (e.button === 0) {
 
+                shooting = true;
 
-        document.addEventListener('keyup', (e) => {
+            }
 
-            if (e.key === 'w') keys.w = false;
+        });
 
-            if (e.key === 'a') keys.a = false;
 
-            if (e.key === 's') keys.s = false;
+        canvas.addEventListener('mouseup', (e) => {
 
-            if (e.key === 'd') keys.d = false;
+            if (e.button === 0) {
 
-        });
+                shooting = false;
 
+            }
 
+        });
 
-        canvas.addEventListener('mousemove', (e) => {
 
-            mouse.x = e.clientX;
+        function drawPlayer(player) {
 
-            mouse.y = e.clientY;
+            ctx.fillStyle = player.color;
 
-        });
+            ctx.beginPath();
 
+            ctx.arc(player.x - camera.x, player.y - camera.y, player.radius, 0, Math.PI * 2);
 
+            ctx.fill();
 
-        canvas.addEventListener('mousedown', (e) => {
+            ctx.closePath();
 
-            if (e.button === 0) {
+        }
 
-                shooting = true;
 
-            }
+        function drawBullet(bullet) {
 
-        });
+            ctx.fillStyle = 'white';
 
+            ctx.beginPath();
 
+            ctx.arc(bullet.x - camera.x, bullet.y - camera.y, bullet.radius, 0, Math.PI * 2);
 
-        canvas.addEventListener('mouseup', (e) => {
+            ctx.fill();
 
-            if (e.button === 0) {
+            ctx.closePath();
 
-                shooting = false;
+        }
 
-            }
 
-        });
+        function drawCube(cube) {
 
+            ctx.fillStyle = '#ffde59';
 
+            ctx.beginPath();
 
-        function drawPlayer(player) {
+            ctx.rect(cube.x - camera.x, cube.y - camera.y, cube.size, cube.size);
 
-            ctx.fillStyle = player.color;
+            ctx.fill();
 
-            ctx.beginPath();
+            ctx.closePath();
 
-            ctx.arc(player.x - camera.x, player.y - camera.y, player.radius, 0, Math.PI * 2);
+        }
 
-            ctx.fill();
 
-            ctx.closePath();
+        function drawPentagon(pentagon) {
 
-        }
+            ctx.fillStyle = '#800080';
 
+            ctx.beginPath();
 
+            const sides = 5;
 
-        function drawBullet(bullet) {
+            const size = pentagon.size / 2;
 
-            ctx.fillStyle = 'white';
+            ctx.moveTo(pentagon.x - camera.x + size * Math.cos(0), pentagon.y - camera.y + size * Math.sin(0));
 
-            ctx.beginPath();
+            for (let i = 1; i <= sides; i++) {
 
-            ctx.arc(bullet.x - camera.x, bullet.y - camera.y, bullet.radius, 0, Math.PI * 2);
+                ctx.lineTo(pentagon.x - camera.x + size * Math.cos(i * 2 * Math.PI / sides), pentagon.y - camera.y + size * Math.sin(i * 2 * Math.PI / sides));
 
-            ctx.fill();
+            }
 
-            ctx.closePath();
+            ctx.fill();
 
-        }
+            ctx.closePath();
 
+        }
 
 
-        function drawCube(cube) {
+        function drawTriangle(triangle) {
 
-            ctx.fillStyle = '#ffde59';
+            ctx.fillStyle = '#ff4d4d';
 
-            ctx.beginPath();
+            ctx.beginPath();
 
-            ctx.rect(cube.x - camera.x, cube.y - camera.y, cube.size, cube.size);
+            const sides = 3;
 
-            ctx.fill();
+            const size = triangle.size / 2;
 
-            ctx.closePath();
+            ctx.moveTo(triangle.x - camera.x + size * Math.cos(0), triangle.y - camera.y + size * Math.sin(0));
 
-        }
+            for (let i = 1; i <= sides; i++) {
 
+                ctx.lineTo(triangle.x - camera.x + size * Math.cos(i * 2 * Math.PI / sides), triangle.y - camera.y + size * Math.sin(i * 2 * Math.PI / sides));
 
+            }
 
-        function drawPentagon(pentagon) {
+            ctx.fill();
 
-            ctx.fillStyle = '#800080';
+            ctx.closePath();
 
-            ctx.beginPath();
+        }
 
-            const sides = 5;
 
-            const size = pentagon.size / 2;
+        function drawMap() {
 
-            ctx.moveTo(pentagon.x - camera.x + size * Math.cos(0), pentagon.y - camera.y + size * Math.sin(0));
+            ctx.strokeStyle = '#555';
 
-            for (let i = 1; i <= sides; i++) {
+            ctx.lineWidth = 5;
 
-                ctx.lineTo(pentagon.x - camera.x + size * Math.cos(i * 2 * Math.PI / sides), pentagon.y - camera.y + size * Math.sin(i * 2 * Math.PI / sides));
+            ctx.beginPath();
 
-            }
+            ctx.rect(0 - camera.x, 0 - camera.y, mapSize.width, mapSize.height);
 
-            ctx.fill();
+            ctx.stroke();
 
-            ctx.closePath();
+            ctx.closePath();
 
-        }
+        }
 
 
+        function animate() {
 
-        function drawTriangle(triangle) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            ctx.fillStyle = '#ff4d4d';
 
-            ctx.beginPath();
+            if (playerId && players[playerId]) {
 
-            const sides = 3;
+                const player = players[playerId];
 
-            const size = triangle.size / 2;
+                const lerpFactor = 0.1;
 
-            ctx.moveTo(triangle.x - camera.x + size * Math.cos(0), triangle.y - camera.y + size * Math.sin(0));
+                camera.x += (player.x - canvas.width / 2 - camera.x) * lerpFactor;
 
-            for (let i = 1; i <= sides; i++) {
+                camera.y += (player.y - canvas.height / 2 - camera.y) * lerpFactor;
 
-                ctx.lineTo(triangle.x - camera.x + size * Math.cos(i * 2 * Math.PI / sides), triangle.y - camera.y + size * Math.sin(i * 2 * Math.PI / sides));
+            }
 
-            }
 
-            ctx.fill();
+            drawMap();
 
-            ctx.closePath();
+            Object.values(cubes).forEach(drawCube);
 
-        }
+            Object.values(pentagons).forEach(drawPentagon);
 
+            Object.values(triangles).forEach(drawTriangle);
 
+            Object.values(players).forEach(drawPlayer);
 
-        function drawMap() {
+            Object.values(bullets).forEach(drawBullet);
 
-            ctx.strokeStyle = '#555';
+            
 
-            ctx.lineWidth = 5;
 
-            ctx.beginPath();
+            if (playerId && players[playerId]) {
 
-            ctx.rect(0 - camera.x, 0 - camera.y, mapSize.width, mapSize.height);
+                const player = players[playerId];
 
-            ctx.stroke();
+                const dx = mouse.x - (player.x - camera.x);
 
-            ctx.closePath();
+                const dy = mouse.y - (player.y - camera.y);
 
-        }
+                const newBarrelAngle = Math.atan2(dy, dx);
 
+                if (newBarrelAngle !== playerBarrelAngle) {
 
+                    playerBarrelAngle = newBarrelAngle;
 
-        function animate() {
+                    socket.emit('playerAim', { barrelAngle: playerBarrelAngle });
 
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+                }
 
 
+                const now = Date.now();
 
-            if (playerId && players[playerId]) {
+                if (shooting && (now - lastShotTime > shootCooldown)) {
 
-                const player = players[playerId];
+                    lastShotTime = now;
 
-                const lerpFactor = 0.1;
+                    socket.emit('playerShoot');
 
-                camera.x += (player.x - canvas.width / 2 - camera.x) * lerpFactor;
+                }
 
-                camera.y += (player.y - canvas.height / 2 - camera.y) * lerpFactor;
+            }
 
-            }
+            
+            if (playerId) {
 
+                socket.emit('playerInput', keys);
 
+            }
 
-            drawMap();
 
-            Object.values(cubes).forEach(drawCube);
+            requestAnimationFrame(animate);
 
-            Object.values(pentagons).forEach(drawPentagon);
+        }
 
-            Object.values(triangles).forEach(drawTriangle);
 
-            Object.values(players).forEach(drawPlayer);
+        animate();
 
-            Object.values(bullets).forEach(drawBullet);
-
-            
-
-
-
-            if (playerId && players[playerId]) {
-
-                const player = players[playerId];
-
-                const dx = mouse.x - (player.x - camera.x);
-
-                const dy = mouse.y - (player.y - camera.y);
-
-                const newBarrelAngle = Math.atan2(dy, dx);
-
-                if (newBarrelAngle !== playerBarrelAngle) {
-
-                    playerBarrelAngle = newBarrelAngle;
-
-                    socket.emit('playerAim', { barrelAngle: playerBarrelAngle });
-
-                }
-
-
-
-                if (shooting) {
-
-                    const bulletStrength = 10;
-
-                    const bulletSpeed = 10;
-
-                    const bulletVelocity = {
-
-                        x: Math.cos(player.barrelAngle) * bulletSpeed,
-
-                        y: Math.sin(player.barrelAngle) * bulletSpeed
-
-                    };
-
-                    const bulletSpawnX = player.x + Math.cos(player.barrelAngle) * (player.radius + player.bulletRadius);
-
-                    const bulletSpawnY = player.y + Math.sin(player.barrelAngle) * (player.radius + player.bulletRadius);
-
-
-
-                    socket.emit('playerShoot', {
-
-                        x: bulletSpawnX,
-
-                        y: bulletSpawnY,
-
-                        velocity: bulletVelocity,
-
-                        strength: bulletStrength
-
-                    });
-
-                }
-
-            }
-
-            
-
-            if (playerId) {
-
-                socket.emit('playerInput', keys);
-
-            }
-
-
-
-            requestAnimationFrame(animate);
-
-        }
-
-
-
-        animate();
-
-    </script>
+    </script>
 
 </body>
 
