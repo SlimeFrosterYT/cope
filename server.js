@@ -14,19 +14,22 @@ const port = process.env.PORT || 3000;
 const FADE_DURATION = 1000;
 const BULLET_KNOCKBACK_FORCE = 0.5;
 const CUBE_SIZE = 20;
+const PENTAGON_SIZE = 25;
 const MAX_CUBES = 10;
+const MAX_PENTAGONS = 3;
 const CUBE_SPAWN_INTERVAL = 5000;
+const PENTAGON_SPAWN_INTERVAL = 8000;
 const PLAYER_COLLISION_DAMAGE = 0.1;
 const MAX_HP = 6;
 const HP_REGEN_RATE = 0.005;
 
-// Define the larger map size
+// Define the larger map size as a square
 const mapSize = {
     width: 2000,
     height: 2000
 };
 
-// Define the central wall as an obstacle
+// Define the central wall (now a special spawn zone)
 const wall = {
     x: mapSize.width / 2 - 200, 
     y: mapSize.height / 2 - 200, 
@@ -37,8 +40,10 @@ const wall = {
 const players = {};
 const bullets = {};
 const cubes = {};
+const pentagons = {}; // New object for pentagons
 let bulletCounter = 0;
 let cubeCounter = 0;
+let pentagonCounter = 0;
 
 // Function to check for collision between a rectangle and a circle
 function rectCircleColliding(circle, rect) {
@@ -64,7 +69,7 @@ function rectRectColliding(rect1, rect2) {
            rect1.y + rect1.height > rect2.y;
 }
 
-// Function to spawn a new cube at a valid location
+// Function to spawn a new yellow cube at a valid location
 function spawnCube() {
     if (Object.keys(cubes).length >= MAX_CUBES) return;
 
@@ -88,8 +93,6 @@ function spawnCube() {
             }
         }
         
-        // No longer check for collision with the central wall
-        
         if (collision) {
             attempts++;
             continue;
@@ -112,7 +115,7 @@ function spawnCube() {
     }
 
     if (newCubePos) {
-        const score = Math.floor(Math.random() * (15 - 5 + 1)) + 5;
+        const score = 5; // Fixed strength of 5 for yellow cubes
         cubes[cubeCounter] = {
             id: cubeCounter,
             x: newCubePos.x,
@@ -126,7 +129,66 @@ function spawnCube() {
     }
 }
 
+// Function to spawn a new purple pentagon inside the central square
+function spawnPentagon() {
+    if (Object.keys(pentagons).length >= MAX_PENTAGONS) return;
+    
+    let attempts = 0;
+    let newPentagonPos = null;
+
+    while (attempts < 100 && newPentagonPos === null) {
+        const x = wall.x + Math.random() * (wall.width - PENTAGON_SIZE);
+        const y = wall.y + Math.random() * (wall.height - PENTAGON_SIZE);
+
+        let collision = false;
+        const tempPentagon = { x: x, y: y, size: PENTAGON_SIZE, width: PENTAGON_SIZE, height: PENTAGON_SIZE };
+
+        // Check for collision with existing pentagons
+        for (const pentagonId in pentagons) {
+            if (rectRectColliding(tempPentagon, pentagons[pentagonId])) {
+                collision = true;
+                break;
+            }
+        }
+        
+        if (collision) {
+            attempts++;
+            continue;
+        }
+
+        // Check for collision with players
+        for (const playerId in players) {
+            const player = players[playerId];
+            const playerCircle = { x: player.x, y: player.y, radius: player.radius };
+            if (rectCircleColliding(playerCircle, tempPentagon)) {
+                collision = true;
+                break;
+            }
+        }
+
+        if (!collision) {
+            newPentagonPos = { x, y };
+        }
+        attempts++;
+    }
+
+    if (newPentagonPos) {
+        const score = 20; // Fixed strength of 20 for purple pentagons
+        pentagons[pentagonCounter] = {
+            id: pentagonCounter,
+            x: newPentagonPos.x,
+            y: newPentagonPos.y,
+            size: PENTAGON_SIZE,
+            score: score,
+            width: PENTAGON_SIZE,
+            height: PENTAGON_SIZE
+        };
+        pentagonCounter++;
+    }
+}
+
 setInterval(spawnCube, CUBE_SPAWN_INTERVAL);
+setInterval(spawnPentagon, PENTAGON_SPAWN_INTERVAL);
 
 // Function to get a valid player spawn position
 function getPlayerSpawnPosition(playerRadius) {
@@ -144,7 +206,6 @@ function getPlayerSpawnPosition(playerRadius) {
             height: playerRadius * 2
         };
 
-        // No longer check for collision with the central wall on spawn
         spawnPosition = { x, y };
         attempts++;
     }
@@ -202,7 +263,7 @@ io.on('connection', (socket) => {
             keys: { w: false, a: false, s: false, d: false }
         };
 
-        socket.emit('init', { playerId: socket.id, players, bullets, cubes, wall, mapSize });
+        socket.emit('init', { playerId: socket.id, players, bullets, cubes, pentagons, wall, mapSize });
     });
 
     socket.on('playerInput', (keys) => {
@@ -298,8 +359,6 @@ setInterval(() => {
             player.hp = Math.min(player.hp + HP_REGEN_RATE, MAX_HP);
         }
 
-        // The central wall is no longer an obstacle, so this check is removed.
-
         // Check for player death after all damage is applied
         if (player.hp <= 0) {
             io.to(player.socketId).emit('kill');
@@ -314,8 +373,6 @@ setInterval(() => {
         if (!bullet.isFading) {
             bullet.x += bullet.velocity.x;
             bullet.y += bullet.velocity.y;
-
-            // The central wall is no longer an obstacle, so collision is removed.
 
             // Bullet-Map Boundary collision
             if (bullet.x < 0 || bullet.x > mapSize.width || bullet.y < 0 || bullet.y > mapSize.height) {
@@ -378,6 +435,27 @@ setInterval(() => {
                     bulletsToRemove.push(bulletId);
                 }
             }
+            
+            // New Bullet-Pentagon collision
+            for (const pentagonId in pentagons) {
+                const pentagon = pentagons[pentagonId];
+                const closestX = Math.max(pentagon.x, Math.min(bullet.x, pentagon.x + pentagon.size));
+                const closestY = Math.max(pentagon.y, Math.min(bullet.y, pentagon.y + pentagon.size));
+                
+                const distToPentagonX = bullet.x - closestX;
+                const distToPentagonY = bullet.y - closestY;
+                const distSquaredToPentagon = (distToPentagonX * distToPentagonX) + (distToPentagonY * distToPentagonY);
+                
+                if (distSquaredToPentagon < (bullet.radius * bullet.radius)) {
+                    const killer = players[bullet.ownerId];
+                    if (killer) {
+                        killer.score += pentagon.score;
+                    }
+                    
+                    delete pentagons[pentagonId];
+                    bulletsToRemove.push(bulletId);
+                }
+            }
         }
 
         if (bullet.isFading && (now - bullet.fadeStartTime > FADE_DURATION)) {
@@ -391,6 +469,7 @@ setInterval(() => {
 
     io.emit('updateBullets', bullets);
     io.emit('updateCubes', cubes);
+    io.emit('updatePentagons', pentagons);
 }, 1000 / 60);
 
 app.get('/', (req, res) => {
