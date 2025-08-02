@@ -3,7 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <title>Growth Manhunt</title>
     <style>
         body {
@@ -15,6 +14,7 @@
             display: block;
         }
     </style>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 </head>
 <body>
     <canvas id="gameCanvas"></canvas>
@@ -39,132 +39,129 @@
         };
 
         let isMouseDown = false;
-
-        const player = {
-            x: canvas.width / 2,
-            y: canvas.height / 2,
-            radius: 25,
-            maxSpeed: 5,
-            acceleration: 0.3,
-            friction: 0.95, // Applied to velocity each frame
-            velocity: { x: 0, y: 0 },
-            barrelLength: 40,
-            barrelWidth: 15
-        };
-
-        const bullets = [];
         let lastShotTime = 0;
         const cooldown = 500; // 0.5 seconds in milliseconds
 
-        class Bullet {
-            constructor(x, y, angle) {
-                this.x = x;
-                this.y = y;
-                this.radius = 8;
-                this.speed = 10;
-                this.velocity = {
-                    x: Math.cos(angle) * this.speed,
-                    y: Math.sin(angle) * this.speed
-                };
-            }
+        // --- Multiplayer Logic - Replaces single-player variables ---
+        const socket = io("https://copemai.onrender.com");
+        let myId;
+        let players = {};
+        let bullets = {};
 
-            draw() {
-                ctx.fillStyle = '#ffffff';
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-                ctx.fill();
-            }
+        // Listeners for server events
+        socket.on('connect', () => {
+            console.log('Connected to server with ID:', socket.id);
+        });
 
-            update() {
-                this.x += this.velocity.x;
-                this.y += this.velocity.y;
-            }
-        }
+        socket.on('init', (data) => {
+            myId = data.playerId;
+            players = data.players;
+            bullets = data.bullets;
+        });
 
-        function drawPlayer() {
-            const angle = Math.atan2(mouse.y - player.y, mouse.x - player.x);
+        socket.on('playerConnected', (newPlayer) => {
+            players[newPlayer.id] = newPlayer;
+        });
 
-            // Draw the player's body
-            ctx.fillStyle = '#ffffff';
+        socket.on('updatePlayers', (serverPlayers) => {
+            players = serverPlayers;
+        });
+
+        socket.on('playerDisconnected', (playerId) => {
+            delete players[playerId];
+        });
+
+        socket.on('newBullet', (bulletData) => {
+            bullets[bulletData.id] = bulletData;
+        });
+
+        socket.on('updateBullets', (serverBullets) => {
+            bullets = serverBullets;
+        });
+
+        // The drawing functions now work on the "players" and "bullets" objects from the server
+        function drawPlayer(player) {
+            const angle = player.barrelAngle;
+
+            ctx.fillStyle = player.color;
             ctx.beginPath();
             ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
             ctx.fill();
 
-            // Save the current canvas state before rotating
             ctx.save();
-            
-            // Translate the canvas origin to the player's center
             ctx.translate(player.x, player.y);
-            
-            // Rotate the canvas to the calculated angle
             ctx.rotate(angle);
 
-            // Draw the barrel, offset a tiny bit from the player's center
             ctx.fillStyle = '#cccccc';
-            ctx.fillRect(player.radius - 2, -player.barrelWidth / 2, player.barrelLength, player.barrelWidth);
-            
-            // Restore the canvas state to its original, non-rotated state
+            ctx.fillRect(player.radius - 2, -20 / 2, 20, 20);
             ctx.restore();
         }
 
-        function updatePlayer() {
-            // Apply acceleration based on key presses
-            if (keys.w) player.velocity.y -= player.acceleration;
-            if (keys.s) player.velocity.y += player.acceleration;
-            if (keys.a) player.velocity.x -= player.acceleration;
-            if (keys.d) player.velocity.x += player.acceleration;
-
-            // Apply friction to slow down the player
-            player.velocity.x *= player.friction;
-            player.velocity.y *= player.friction;
-
-            // Cap the player's speed
-            if (Math.abs(player.velocity.x) > player.maxSpeed) {
-                player.velocity.x = Math.sign(player.velocity.x) * player.maxSpeed;
-            }
-            if (Math.abs(player.velocity.y) > player.maxSpeed) {
-                player.velocity.y = Math.sign(player.velocity.y) * player.maxSpeed;
-            }
-
-            // Update player position based on velocity
-            player.x += player.velocity.x;
-            player.y += player.velocity.y;
+        function drawBullet(bullet) {
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(bullet.x, bullet.y, bullet.radius, 0, Math.PI * 2);
+            ctx.fill();
         }
+        // --- End of Multiplayer Logic ---
 
         function gameLoop() {
-            // Clear the canvas
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Update player position
-            updatePlayer();
+            const myPlayer = players[myId];
+            if (myPlayer) {
+                // Handle player movement based on local key presses
+                let vx = 0;
+                let vy = 0;
+                const speed = 4.5;
+                
+                if (keys.w) vy -= speed;
+                if (keys.s) vy += speed;
+                if (keys.a) vx -= speed;
+                if (keys.d) vx += speed;
 
-            // Handle continuous shooting
-            const now = Date.now();
-            if (isMouseDown && now - lastShotTime > cooldown) {
-                lastShotTime = now;
-                const angle = Math.atan2(mouse.y - player.y, mouse.x - player.x);
-                // Position the bullet to come from the end of the barrel
-                const bulletStartX = player.x + Math.cos(angle) * (player.radius + player.barrelLength);
-                const bulletStartY = player.y + Math.sin(angle) * (player.radius + player.barrelLength);
-                bullets.push(new Bullet(bulletStartX, bulletStartY, angle));
-            }
+                myPlayer.x += vx;
+                myPlayer.y += vy;
+                
+                // Update barrel angle based on mouse position
+                myPlayer.barrelAngle = Math.atan2(mouse.y - myPlayer.y, mouse.x - myPlayer.x);
 
-            // Draw player
-            drawPlayer();
-
-            // Update and draw bullets
-            for (let i = bullets.length - 1; i >= 0; i--) {
-                const bullet = bullets[i];
-                bullet.update();
-                bullet.draw();
-
-                // Remove bullets that are off-screen
-                if (bullet.x < 0 || bullet.x > canvas.width || bullet.y < 0 || bullet.y > canvas.height) {
-                    bullets.splice(i, 1);
+                // Send the updated state to the server
+                socket.emit('playerMove', { 
+                    x: myPlayer.x, 
+                    y: myPlayer.y, 
+                    barrelAngle: myPlayer.barrelAngle 
+                });
+                
+                // Handle shooting
+                if (isMouseDown && Date.now() - lastShotTime > cooldown) {
+                    lastShotTime = Date.now();
+                    const angle = myPlayer.barrelAngle;
+                    const bulletStartX = myPlayer.x + Math.cos(angle) * (myPlayer.radius + 20);
+                    const bulletStartY = myPlayer.y + Math.sin(angle) * (myPlayer.radius + 20);
+                    
+                    // Tell the server you're shooting
+                    socket.emit('playerShoot', { 
+                        x: bulletStartX, 
+                        y: bulletStartY,
+                        velocity: {
+                            x: Math.cos(angle) * 10,
+                            y: Math.sin(angle) * 10
+                        }
+                    });
                 }
             }
 
-            // Loop
+            // Draw all players based on the state received from the server
+            for (const id in players) {
+                drawPlayer(players[id]);
+            }
+            
+            // Draw all bullets based on the state received from the server
+            for (const id in bullets) {
+                drawBullet(bullets[id]);
+            }
+            
             requestAnimationFrame(gameLoop);
         }
 
