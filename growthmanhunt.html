@@ -40,14 +40,13 @@
 
         let isMouseDown = false;
         let lastShotTime = 0;
-        const cooldown = 500; // 0.5 seconds in milliseconds
+        const cooldown = 500;
 
         const socket = io("https://copemai.onrender.com");
         let myId;
         let players = {};
         let bullets = {};
 
-        // --- Camera and Static World Objects ---
         const camera = { x: 0, y: 0 };
         const wall = {
             x: 200, 
@@ -63,9 +62,7 @@
             ctx.lineWidth = wall.lineWidth;
             ctx.strokeRect(wall.x - camera.x, wall.y - camera.y, wall.width, wall.height);
         }
-        // --- End Camera and Static World Objects ---
 
-        // Listeners for server events
         socket.on('connect', () => {
             console.log('Connected to server with ID:', socket.id);
         });
@@ -96,7 +93,6 @@
             bullets = serverBullets;
         });
 
-        // The drawing functions now use the camera offset
         function drawPlayer(player) {
             const angle = player.barrelAngle;
             const screenX = player.x - camera.x;
@@ -130,11 +126,9 @@
 
             const myPlayer = players[myId];
             if (myPlayer) {
-                // Update the camera to center on the local player
                 camera.x = myPlayer.x - canvas.width / 2;
                 camera.y = myPlayer.y - canvas.height / 2;
 
-                // Handle player movement based on local key presses
                 let vx = 0;
                 let vy = 0;
                 const speed = 4.5;
@@ -147,17 +141,14 @@
                 myPlayer.x += vx;
                 myPlayer.y += vy;
                 
-                // Update barrel angle based on mouse position
                 myPlayer.barrelAngle = Math.atan2(mouse.y - canvas.height / 2, mouse.x - canvas.width / 2);
 
-                // Send the updated state to the server
                 socket.emit('playerMove', { 
                     x: myPlayer.x, 
                     y: myPlayer.y, 
                     barrelAngle: myPlayer.barrelAngle 
                 });
                 
-                // Handle shooting
                 if (isMouseDown && Date.now() - lastShotTime > cooldown) {
                     lastShotTime = Date.now();
                     const angle = myPlayer.barrelAngle;
@@ -175,15 +166,12 @@
                 }
             }
 
-            // Draw the wall first
             drawWall();
 
-            // Draw all players based on the state received from the server
             for (const id in players) {
                 drawPlayer(players[id]);
             }
             
-            // Draw all bullets based on the state received from the server
             for (const id in bullets) {
                 drawBullet(bullets[id]);
             }
@@ -191,12 +179,11 @@
             requestAnimationFrame(gameLoop);
         }
 
-        // Handle keyboard input
         window.addEventListener('keydown', (e) => {
             if (e.key === 'w') keys.w = true;
             if (e.key === 'a') keys.a = true;
             if (e.key === 's') keys.s = true;
-            if (e.key === 'd') keys.d = true;
+            if (e.key === 'd') keys.d = false;
         });
 
         window.addEventListener('keyup', (e) => {
@@ -206,13 +193,11 @@
             if (e.key === 'd') keys.d = false;
         });
 
-        // Handle mouse movement to track the cursor position
         window.addEventListener('mousemove', (e) => {
             mouse.x = e.clientX;
             mouse.y = e.clientY;
         });
 
-        // Handle mouse click to shoot continuously
         window.addEventListener('mousedown', () => {
             isMouseDown = true;
         });
