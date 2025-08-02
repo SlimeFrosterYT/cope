@@ -48,41 +48,52 @@ setInterval(spawnCube, 5000);
 io.on('connection', (socket) => {
     console.log('A user connected:', socket.id);
 
-    players[socket.id] = {
-        id: socket.id,
-        username: `Player${socket.id.substring(0, 4)}`,
-        x: 500,
-        y: 500,
-        color: '#ffffff',
-        radius: 25,
-        bulletRadius: 10,
-        barrelAngle: 0,
-        velocity: { x: 0, y: 0 },
-        acceleration: 0.25,
-        friction: 0.85,
-        maxSpeed: 4.5,
-        hp: 6,
-        score: 26263,
-        keys: { w: false, a: false, s: false, d: false }
-    };
-
-    socket.emit('init', { playerId: socket.id, players, bullets, cubes, wall });
-    // Do not broadcast playerConnected messages
-    // socket.broadcast.emit('playerConnected', players[socket.id]);
-
     socket.on('disconnect', () => {
         console.log('A user disconnected:', socket.id);
-        if(players[socket.id]) {
-            delete players[socket.id];
-            // Do not broadcast playerDisconnected messages
-            // io.emit('playerDisconnected', socket.id);
+        // Find the player by socket ID and delete them
+        for (const playerId in players) {
+            if (players[playerId].socketId === socket.id) {
+                delete players[playerId];
+                break;
+            }
         }
     });
 
     socket.on('setUsername', (username) => {
-        if (players[socket.id]) {
-            players[socket.id].username = username;
+        // Find if a player with this username already exists
+        let existingPlayerId = null;
+        for (const playerId in players) {
+            if (players[playerId].username === username) {
+                existingPlayerId = playerId;
+                break;
+            }
         }
+        
+        // If an old player with this username exists, delete them
+        if (existingPlayerId) {
+            delete players[existingPlayerId];
+        }
+
+        // Create the new player with the new socket ID
+        players[socket.id] = {
+            socketId: socket.id,
+            username: username,
+            x: 500,
+            y: 500,
+            color: '#ffffff',
+            radius: 25,
+            bulletRadius: 10,
+            barrelAngle: 0,
+            velocity: { x: 0, y: 0 },
+            acceleration: 0.25,
+            friction: 0.85,
+            maxSpeed: 4.5,
+            hp: 6,
+            score: 26263,
+            keys: { w: false, a: false, s: false, d: false }
+        };
+
+        socket.emit('init', { playerId: socket.id, players, bullets, cubes, wall });
     });
 
     socket.on('playerInput', (keys) => {
@@ -192,7 +203,7 @@ setInterval(() => {
                 const distToPlayerY = bullet.y - player.y;
                 const distSquaredToPlayer = (distToPlayerX * distToPlayerX) + (distToPlayerY * distToPlayerY);
 
-                if (distSquaredToPlayer < (player.radius * player.radius) && bullet.ownerId !== player.id) {
+                if (distSquaredToPlayer < (player.radius * player.radius) && bullet.ownerId !== player.socketId) {
                     player.hp--;
 
                     const angle = Math.atan2(distToPlayerY, distToPlayerX);
@@ -208,7 +219,7 @@ setInterval(() => {
                         }
                         
                         // Emit 'kill' event to the dead client to trigger redirection
-                        io.to(player.id).emit('kill');
+                        io.to(player.socketId).emit('kill');
                         
                         delete players[playerId];
                         // Do not broadcast playerDisconnected messages
