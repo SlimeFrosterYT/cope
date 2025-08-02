@@ -96,6 +96,7 @@
         let players = {};
         let playersLastState = {};
         let bullets = {};
+        let cubes = {}; // New object for cubes
         let lastUpdateTime = Date.now();
         let chatIsFocused = false;
 
@@ -187,6 +188,11 @@
             ctx.fill();
             ctx.globalAlpha = 1;
         }
+        
+        function drawCube(cube) {
+            ctx.fillStyle = 'yellow';
+            ctx.fillRect(cube.x - camera.x, cube.y - camera.y, cube.size, cube.size);
+        }
 
         function addMessageToChat(message) {
             const p = document.createElement('p');
@@ -205,6 +211,7 @@
             players = data.players;
             playersLastState = JSON.parse(JSON.stringify(data.players));
             bullets = data.bullets;
+            cubes = data.cubes; // Get initial cubes
             wall = data.wall;
         });
 
@@ -233,6 +240,10 @@
 
         socket.on('updateBullets', (serverBullets) => {
             bullets = serverBullets;
+        });
+
+        socket.on('updateCubes', (serverCubes) => {
+            cubes = serverCubes;
         });
 
         socket.on('chatMessage', (message) => {
@@ -271,12 +282,17 @@
                             x: Math.cos(angle) * 10,
                             y: Math.sin(angle) * 10
                         },
-                        radius: myPlayer.bulletRadius
+                        radius: 10
                     });
                 }
             }
 
             drawWall();
+
+            // Draw cubes first, so players and bullets are on top
+            for (const id in cubes) {
+                drawCube(cubes[id]);
+            }
 
             for (const id in players) {
                 drawPlayer(players[id]);
