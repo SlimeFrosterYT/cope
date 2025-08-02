@@ -13,7 +13,6 @@ app.use(express.static(__dirname));
 const port = process.env.PORT || 3000;
 const FADE_DURATION = 1000;
 const BULLET_KNOCKBACK_FORCE = 0.5;
-const GROWTH_FACTOR = 1; // Amount to increase player/bullet size on a kill
 
 const players = {};
 const bullets = {};
@@ -43,17 +42,20 @@ io.on('connection', (socket) => {
         friction: 0.85,
         maxSpeed: 4.5,
         hp: 6,
+        score: 26263,
         keys: { w: false, a: false, s: false, d: false }
     };
 
     socket.emit('init', { playerId: socket.id, players, bullets, wall });
-    socket.broadcast.emit('playerConnected', players[socket.id]);
+    // Do not broadcast playerConnected messages
+    // socket.broadcast.emit('playerConnected', players[socket.id]);
 
     socket.on('disconnect', () => {
         console.log('A user disconnected:', socket.id);
         if(players[socket.id]) {
             delete players[socket.id];
-            io.emit('playerDisconnected', socket.id);
+            // Do not broadcast playerDisconnected messages
+            // io.emit('playerDisconnected', socket.id);
         }
     });
 
@@ -92,7 +94,7 @@ io.on('connection', (socket) => {
             x: data.x,
             y: data.y,
             velocity: data.velocity,
-            radius: data.radius,
+            radius: 10, // bullet radius fixed to 10
             isFading: false,
             fadeStartTime: 0
         };
@@ -178,15 +180,17 @@ setInterval(() => {
                     const killer = players[bullet.ownerId];
 
                     if (player.hp <= 0) {
-                        // Increase killer's size
-                        killer.radius += GROWTH_FACTOR;
-                        killer.bulletRadius += GROWTH_FACTOR * 0.5;
-
+                        if (killer) {
+                            killer.score += player.score;
+                            io.emit('chatMessage', `${killer.username} killed ${player.username} and gained ${player.score} score!`);
+                        }
+                        
                         // Emit 'kill' event to the dead client to trigger redirection
                         io.to(player.id).emit('kill');
                         
                         delete players[playerId];
-                        io.emit('playerDisconnected', playerId);
+                        // Do not broadcast playerDisconnected messages
+                        // io.emit('playerDisconnected', playerId);
                     }
 
                     bullet.isFading = true;
