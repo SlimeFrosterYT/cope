@@ -34,6 +34,7 @@ const PLAYER_SHOOT_COOLDOWN = 200; // in milliseconds
 const BULLET_STRENGTH = 10;
 const BULLET_SPEED = 10;
 const BULLET_RADIUS = 10;
+const CHAT_MESSAGE_LIFETIME = 5000; // 5 seconds for chat messages
 
 
 // Define the larger map size as a square
@@ -289,9 +290,12 @@ io.on('connection', (socket) => {
     });
 
     socket.on('setUsername', (username) => {
+        // Assign "Unnamed" if username is not provided
+        const finalUsername = username ? username : "Unnamed";
+
         let existingPlayerId = null;
         for (const playerId in players) {
-            if (players[playerId].username === username) {
+            if (players[playerId].username === finalUsername) {
                 existingPlayerId = playerId;
                 break;
             }
@@ -306,7 +310,7 @@ io.on('connection', (socket) => {
 
         players[socket.id] = {
             socketId: socket.id,
-            username: username,
+            username: finalUsername,
             x: spawnPos.x,
             y: spawnPos.y,
             color: '#ffffff',
@@ -321,7 +325,8 @@ io.on('connection', (socket) => {
             score: 26263,
             keys: { w: false, a: false, s: false, d: false },
             lastDamageTime: 0,
-            lastShotTime: 0
+            lastShotTime: 0,
+            chatMessages: [] // New array to store chat messages
         };
 
         socket.emit('init', { playerId: socket.id, players, bullets, cubes, pentagons, triangles, wall, mapSize });
@@ -344,7 +349,10 @@ io.on('connection', (socket) => {
     socket.on('chatMessage', (message) => {
         const player = players[socket.id];
         if (player) {
-            io.emit('chatMessage', `${player.username}: ${message}`);
+            player.chatMessages.push({
+                text: message,
+                timestamp: Date.now()
+            });
         }
     });
 
@@ -436,6 +444,9 @@ setInterval(() => {
         if (player.hp < MAX_HP && (now - player.lastDamageTime > HP_REGEN_DELAY)) {
             player.hp = Math.min(player.hp + HP_REGEN_RATE, MAX_HP);
         }
+
+        // Remove old chat messages
+        player.chatMessages = player.chatMessages.filter(msg => now - msg.timestamp < CHAT_MESSAGE_LIFETIME);
 
         if (player.hp <= 0) {
             io.to(player.socketId).emit('kill');
