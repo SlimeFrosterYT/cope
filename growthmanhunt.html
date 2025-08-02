@@ -41,6 +41,7 @@
         let isMouseDown = false;
         let lastShotTime = 0;
         const cooldown = 500;
+        const FADE_DURATION = 1000;
 
         const socket = io("https://copemai.onrender.com");
         let myId;
@@ -50,20 +51,7 @@
         let lastUpdateTime = Date.now();
 
         const camera = { x: 0, y: 0 };
-        const wall = {
-            x: 200, 
-            y: 200, 
-            width: 200,
-            height: 200,
-            strokeStyle: '#ffffff',
-            lineWidth: 2
-        };
-
-        function drawWall() {
-            ctx.strokeStyle = wall.strokeStyle;
-            ctx.lineWidth = wall.lineWidth;
-            ctx.strokeRect(wall.x - camera.x, wall.y - camera.y, wall.width, wall.height);
-        }
+        let wall; // The wall data will now come from the server
 
         socket.on('connect', () => {
             console.log('Connected to server with ID:', socket.id);
@@ -73,6 +61,8 @@
             myId = data.playerId;
             players = data.players;
             playersLastState = JSON.parse(JSON.stringify(data.players));
+            bullets = data.bullets;
+            wall = data.wall; // Receive the wall data from the server
         });
 
         socket.on('playerConnected', (newPlayer) => {
@@ -81,7 +71,6 @@
         });
 
         socket.on('updatePlayers', (serverPlayers) => {
-            // Store the current player state to interpolate from
             playersLastState = JSON.parse(JSON.stringify(players));
             players = serverPlayers;
             lastUpdateTime = Date.now();
@@ -99,18 +88,24 @@
         socket.on('updateBullets', (serverBullets) => {
             bullets = serverBullets;
         });
+        
+        function drawWall() {
+            if (!wall) return; // Don't draw if wall data isn't received yet
+            ctx.strokeStyle = '#ffffff'; // Color is now hardcoded on the client
+            ctx.lineWidth = 2;
+            ctx.strokeRect(wall.x - camera.x, wall.y - camera.y, wall.width, wall.height);
+        }
 
         function drawPlayer(player) {
             let playerToDraw = player;
             if (player.id !== myId && playersLastState[player.id]) {
                 const now = Date.now();
                 const latency = now - lastUpdateTime;
-                const interpolationFactor = Math.min(1, latency / 100); // Interpolate over 100ms
+                const interpolationFactor = Math.min(1, latency / 100);
 
                 const lastPos = playersLastState[player.id];
                 const currentPos = player;
 
-                // Interpolate between the last known position and the new one
                 const interpolatedX = lastPos.x + (currentPos.x - lastPos.x) * interpolationFactor;
                 const interpolatedY = lastPos.y + (currentPos.y - lastPos.y) * interpolationFactor;
 
@@ -136,12 +131,23 @@
         }
 
         function drawBullet(bullet) {
+            const now = Date.now();
+            let opacity = 1;
+            if (bullet.isFading) {
+                const elapsedTime = now - bullet.fadeStartTime;
+                opacity = 1 - (elapsedTime / FADE_DURATION);
+                if (opacity < 0) opacity = 0;
+            }
+
             const screenX = bullet.x - camera.x;
             const screenY = bullet.y - camera.y;
+            
+            ctx.globalAlpha = opacity;
             ctx.fillStyle = '#ffffff';
             ctx.beginPath();
             ctx.arc(screenX, screenY, bullet.radius, 0, Math.PI * 2);
             ctx.fill();
+            ctx.globalAlpha = 1; // Reset alpha for other drawings
         }
 
         function gameLoop() {
@@ -206,7 +212,7 @@
             if (e.key === 'w') keys.w = true;
             if (e.key === 'a') keys.a = true;
             if (e.key === 's') keys.s = true;
-            if (e.key === 'd') keys.d = true; // FIX: Corrected typo
+            if (e.key === 'd') keys.d = true;
         });
 
         window.addEventListener('keyup', (e) => {
