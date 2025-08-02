@@ -128,7 +128,7 @@
             ctx.rotate(angle);
 
             ctx.fillStyle = '#cccccc';
-            ctx.fillRect(playerToDraw.radius - 2, -20 / 2, 20, 20);
+            ctx.fillRect(playerToDraw.radius - 2, -playerToDraw.radius / 2, playerToDraw.radius * 2, playerToDraw.radius / 2);
             ctx.restore();
 
             // Draw username
@@ -221,6 +221,11 @@
             addMessageToChat(message);
         });
 
+        // Listen for the "kill" event and redirect the user
+        socket.on('kill', () => {
+            window.location.href = 'index.html';
+        });
+
         function gameLoop() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -247,7 +252,8 @@
                         velocity: {
                             x: Math.cos(angle) * 10,
                             y: Math.sin(angle) * 10
-                        }
+                        },
+                        radius: myPlayer.bulletRadius
                     });
                 }
             }
