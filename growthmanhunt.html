@@ -123,12 +123,13 @@
             ctx.arc(screenX, screenY, playerToDraw.radius, 0, Math.PI * 2);
             ctx.fill();
 
+            // Draw the barrel
             ctx.save();
             ctx.translate(screenX, screenY);
             ctx.rotate(angle);
-
             ctx.fillStyle = '#cccccc';
-            ctx.fillRect(playerToDraw.radius - 2, -playerToDraw.radius / 2, playerToDraw.radius * 2, playerToDraw.radius / 2);
+            // Barrel drawing fix: Proportional size and correct position
+            ctx.fillRect(playerToDraw.radius, -playerToDraw.radius * 0.1, playerToDraw.radius * 1.2, playerToDraw.radius * 0.2);
             ctx.restore();
 
             // Draw username
