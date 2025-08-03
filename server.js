@@ -19,12 +19,12 @@ const SHAPE_COLLISION_KNOCKBACK = 0.05;
 const CUBE_SIZE = 20;
 const TRIANGLE_SIZE = 40;
 const PENTAGON_SIZE = 50;
-const MAX_CUBES = 20;
-const MAX_PENTAGONS = 6;
-const MAX_TRIANGLES = 10;
-const CUBE_SPAWN_INTERVAL = 3000;
-const PENTAGON_SPAWN_INTERVAL = 5000;
-const TRIANGLE_SPAWN_INTERVAL = 4000;
+const MAX_CUBES = 40; // Increased
+const MAX_PENTAGONS = 12; // Increased
+const MAX_TRIANGLES = 20; // Increased
+const CUBE_SPAWN_INTERVAL = 1500; // Decreased
+const PENTAGON_SPAWN_INTERVAL = 2500; // Decreased
+const TRIANGLE_SPAWN_INTERVAL = 2000; // Decreased
 const PLAYER_COLLISION_DAMAGE = 0.5;
 const SHAPE_COLLISION_DAMAGE = 1;
 const MAX_HP = 100;
@@ -37,8 +37,10 @@ const BULLET_STRENGTH = 10;
 const BULLET_SPEED = 10;
 const BULLET_RADIUS = 10;
 const CHAT_MESSAGE_LIFETIME = 6000; // 6 seconds for chat messages
-const BARREL_LENGTH = 25; // Adjusted length
-const BARREL_WIDTH = 20; // Adjusted width to be thicker
+const BASE_PLAYER_RADIUS = 25;
+const BARREL_LENGTH = 25;
+const BARREL_WIDTH = 20;
+const GROWTH_FACTOR = 0.1; // How much player grows per score
 
 const PENTAGON_SCORE_MIN = 300;
 const PENTAGON_SCORE_MAX = 600;
@@ -334,8 +336,8 @@ io.on('connection', (socket) => {
 
     socket.on('setUsername', (username) => {
         const finalUsername = username ? username : "Unnamed";
-
-        const playerRadius = 25;
+        const initialScore = 100;
+        const playerRadius = BASE_PLAYER_RADIUS + Math.log1p(initialScore) * GROWTH_FACTOR;
         const spawnPos = getPlayerSpawnPosition(playerRadius) || { x: mapSize.width / 4, y: mapSize.height / 4 };
 
         players[socket.id] = {
@@ -343,7 +345,7 @@ io.on('connection', (socket) => {
             username: finalUsername,
             x: spawnPos.x,
             y: spawnPos.y,
-            color: '#ffffff',
+            color: '#007bff', // Player color is now fixed to blue
             radius: playerRadius,
             bulletRadius: BULLET_RADIUS,
             barrelAngle: 0,
@@ -352,7 +354,7 @@ io.on('connection', (socket) => {
             friction: 0.85,
             maxSpeed: 4.5,
             hp: MAX_HP,
-            score: 26263,
+            score: initialScore,
             keys: { w: false, a: false, s: false, d: false },
             lastDamageTime: 0,
             lastShotTime: 0,
@@ -393,7 +395,8 @@ io.on('connection', (socket) => {
         if (player && (now - player.lastShotTime > PLAYER_SHOOT_COOLDOWN)) {
             player.lastShotTime = now;
             
-            const spawnDistance = player.radius + player.bulletRadius - 1;
+            // Adjust bullet spawn position to be slightly inside the player's circle
+            const spawnDistance = player.radius - 5;
             const bulletSpawnX = player.x + Math.cos(player.barrelAngle) * spawnDistance;
             const bulletSpawnY = player.y + Math.sin(player.barrelAngle) * spawnDistance;
 
@@ -410,7 +413,8 @@ io.on('connection', (socket) => {
                 radius: BULLET_RADIUS,
                 isFading: false,
                 fadeStartTime: 0,
-                strength: BULLET_STRENGTH
+                strength: BULLET_STRENGTH,
+                color: player.color // Add player color to the bullet
             };
         }
     });
@@ -459,6 +463,10 @@ setInterval(() => {
         const player = players[id];
         if (!player) continue;
 
+        // Player growth and speed calculation
+        player.radius = BASE_PLAYER_RADIUS + Math.log1p(player.score) * GROWTH_FACTOR;
+        player.maxSpeed = 4.5 / (player.radius / BASE_PLAYER_RADIUS);
+
         for (const cubeId in cubes) {
             const cube = cubes[cubeId];
             const distToCubeX = player.x - (cube.x + cube.size / 2);
@@ -479,6 +487,7 @@ setInterval(() => {
                 
                 player.velocity.x += Math.cos(angle) * SHAPE_COLLISION_KNOCKBACK;
                 player.velocity.y += Math.sin(angle) * SHAPE_COLLISION_KNOCKBACK;
+                delete cubes[cubeId];
             }
         }
         
@@ -502,6 +511,7 @@ setInterval(() => {
                 
                 player.velocity.x += Math.cos(angle) * SHAPE_COLLISION_KNOCKBACK;
                 player.velocity.y += Math.sin(angle) * SHAPE_COLLISION_KNOCKBACK;
+                delete pentagons[pentagonId];
             }
         }
         
@@ -525,13 +535,9 @@ setInterval(() => {
                 
                 player.velocity.x += Math.cos(angle) * SHAPE_COLLISION_KNOCKBACK;
                 player.velocity.y += Math.sin(angle) * SHAPE_COLLISION_KNOCKBACK;
+                delete triangles[triangleId];
             }
         }
-    }
-
-    for (const id in players) {
-        const player = players[id];
-        if (!player) continue;
 
         let newVelocityX = player.velocity.x;
         let newVelocityY = player.velocity.y;
@@ -634,7 +640,8 @@ setInterval(() => {
                     delete cubes[cubeId];
                 
                     if (bullet.strength <= 0) {
-                        bulletsToRemove.add(bulletId);
+                        bullet.isFading = true;
+                        bullet.fadeStartTime = now;
                     }
                 }
             }
@@ -659,7 +666,9 @@ setInterval(() => {
                         
                         delete pentagons[pentagonId];
                     }
-                    bulletsToRemove.add(bulletId);
+                    
+                    bullet.isFading = true;
+                    bullet.fadeStartTime = now;
                 }
             }
 
@@ -683,7 +692,9 @@ setInterval(() => {
                         
                         delete triangles[triangleId];
                     }
-                    bulletsToRemove.add(bulletId);
+                    
+                    bullet.isFading = true;
+                    bullet.fadeStartTime = now;
                 }
             }
         }
