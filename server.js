@@ -32,21 +32,18 @@ const HP_REGEN_DELAY = 20000;
 const HP_REGEN_RATE = 0.05;
 const CUBE_SCORE = 5;
 const TRIANGLE_SCORE = 15;
-// Updated: Bullet cooldown is now 0.5 seconds
 const PLAYER_SHOOT_COOLDOWN = 500; // in milliseconds
 const BULLET_STRENGTH = 10;
 const BULLET_SPEED = 10;
 const BULLET_RADIUS = 10;
 const CHAT_MESSAGE_LIFETIME = 6000; // 6 seconds for chat messages
 const BARREL_LENGTH = 25; // Adjusted length
-// Updated: Barrel width is now thicker
 const BARREL_WIDTH = 20; // Adjusted width to be thicker
 
-// New constants for different pentagon types
 const PENTAGON_SCORE_MIN = 300;
 const PENTAGON_SCORE_MAX = 600;
 const PENTAGON_HP = 50;
-const PENTAGON_COLOR = '#C71585'; // Pinkish-purple
+const PENTAGON_COLOR = '#C71585';
 
 const LIGHT_BLUE_PENTAGON_SPAWN_CHANCE = 0.1; // 10%
 const LIGHT_BLUE_PENTAGON_SCORE_MIN = 5000;
@@ -55,13 +52,11 @@ const LIGHT_BLUE_PENTAGON_HP = 100;
 const LIGHT_BLUE_PENTAGON_COLOR = '#ADD8E6';
 const MAX_LIGHT_BLUE_PENTAGONS = 2;
 
-// Define the larger map size as a square
 const mapSize = {
     width: 6000,
     height: 6000
 };
 
-// Define the central wall (now a special spawn zone)
 const wall = {
     x: mapSize.width / 2 - 600,
     y: mapSize.height / 2 - 600,
@@ -79,7 +74,6 @@ let cubeCounter = 0;
 let pentagonCounter = 0;
 let triangleCounter = 0;
 
-// Function to check for collision between a rectangle and a circle
 function rectCircleColliding(circle, rect) {
     const distX = Math.abs(circle.x - (rect.x + rect.width / 2));
     const distY = Math.abs(circle.y - (rect.y + rect.height / 2));
@@ -95,7 +89,6 @@ function rectCircleColliding(circle, rect) {
     return (dx * dx + dy * dy <= (circle.radius * circle.radius));
 }
 
-// Function to check for collision between two rectangles
 function rectRectColliding(rect1, rect2) {
     return rect1.x < rect2.x + rect2.width &&
            rect1.x + rect1.width > rect2.x &&
@@ -103,7 +96,6 @@ function rectRectColliding(rect1, rect2) {
            rect1.y + rect1.height > rect2.y;
 }
 
-// Function to spawn a new yellow cube at a valid location
 function spawnCube() {
     if (Object.keys(cubes).length >= MAX_CUBES) return;
 
@@ -130,7 +122,6 @@ function spawnCube() {
             continue;
         }
 
-        // Check collision with wall
         if (rectRectColliding(tempCube, wall)) {
             collision = true;
         }
@@ -169,7 +160,6 @@ function spawnCube() {
     }
 }
 
-// Function to spawn a new pentagon
 function spawnPentagon() {
     const lightBluePentagonCount = Object.values(pentagons).filter(p => p.color === LIGHT_BLUE_PENTAGON_COLOR).length;
     const isLightBlue = Math.random() < LIGHT_BLUE_PENTAGON_SPAWN_CHANCE && lightBluePentagonCount < MAX_LIGHT_BLUE_PENTAGONS;
@@ -248,7 +238,6 @@ function spawnPentagon() {
     }
 }
 
-// Function to spawn a new red triangle
 function spawnTriangle() {
     if (Object.keys(triangles).length >= MAX_TRIANGLES) return;
 
@@ -275,7 +264,6 @@ function spawnTriangle() {
             continue;
         }
 
-        // Check collision with wall
         if (rectRectColliding(tempTriangle, wall)) {
             collision = true;
         }
@@ -320,7 +308,6 @@ setInterval(spawnCube, CUBE_SPAWN_INTERVAL);
 setInterval(spawnPentagon, PENTAGON_SPAWN_INTERVAL);
 setInterval(spawnTriangle, TRIANGLE_SPAWN_INTERVAL);
 
-// Function to get a valid player spawn position
 function getPlayerSpawnPosition(playerRadius) {
     let attempts = 0;
     let spawnPosition = null;
@@ -346,7 +333,6 @@ io.on('connection', (socket) => {
     });
 
     socket.on('setUsername', (username) => {
-        // Corrected: The player name is "Unnamed" if not provided
         const finalUsername = username ? username : "Unnamed";
 
         const playerRadius = 25;
@@ -366,7 +352,7 @@ io.on('connection', (socket) => {
             friction: 0.85,
             maxSpeed: 4.5,
             hp: MAX_HP,
-            score: 26263, // Restored the initial score
+            score: 26263,
             keys: { w: false, a: false, s: false, d: false },
             lastDamageTime: 0,
             lastShotTime: 0,
@@ -407,7 +393,7 @@ io.on('connection', (socket) => {
         if (player && (now - player.lastShotTime > PLAYER_SHOOT_COOLDOWN)) {
             player.lastShotTime = now;
             
-            const spawnDistance = player.radius + player.bulletRadius - 1; // Adjusted for barrel position
+            const spawnDistance = player.radius + player.bulletRadius - 1;
             const bulletSpawnX = player.x + Math.cos(player.barrelAngle) * spawnDistance;
             const bulletSpawnY = player.y + Math.sin(player.barrelAngle) * spawnDistance;
 
@@ -434,7 +420,6 @@ setInterval(() => {
     const now = Date.now();
     const bulletsToRemove = new Set();
 
-    // Player-Player collision logic
     const playerIds = Object.keys(players);
     for (let i = 0; i < playerIds.length; i++) {
         for (let j = i + 1; j < playerIds.length; j++) {
@@ -449,7 +434,6 @@ setInterval(() => {
             const minDistance = player1.radius + player2.radius;
 
             if (distance < minDistance) {
-                // Damage and knockback
                 player1.hp -= PLAYER_COLLISION_DAMAGE;
                 player1.lastDamageTime = now;
                 player2.hp -= PLAYER_COLLISION_DAMAGE;
@@ -471,12 +455,10 @@ setInterval(() => {
         }
     }
 
-    // Player-Shape collision logic
     for (const id in players) {
         const player = players[id];
         if (!player) continue;
 
-        // Cubes
         for (const cubeId in cubes) {
             const cube = cubes[cubeId];
             const distToCubeX = player.x - (cube.x + cube.size / 2);
@@ -500,7 +482,6 @@ setInterval(() => {
             }
         }
         
-        // Pentagons
         for (const pentagonId in pentagons) {
             const pentagon = pentagons[pentagonId];
             const distToPentagonX = player.x - (pentagon.x + pentagon.size / 2);
@@ -524,7 +505,6 @@ setInterval(() => {
             }
         }
         
-        // Triangles
         for (const triangleId in triangles) {
             const triangle = triangles[triangleId];
             const distToTriangleX = player.x - (triangle.x + triangle.size / 2);
@@ -598,7 +578,6 @@ setInterval(() => {
             bullet.x += bullet.velocity.x;
             bullet.y += bullet.velocity.y;
 
-            // Instantly remove bullet when hitting map boundary
             if (bullet.x < 0 || bullet.x > mapSize.width || bullet.y < 0 || bullet.y > mapSize.height) {
                 bulletsToRemove.add(bulletId);
             }
@@ -725,7 +704,7 @@ setInterval(() => {
 }, 1000 / 60);
 
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
+    res.sendFile(path.join(__dirname, 'growthmanhunt.html'));
 });
 
 server.listen(port, () => {
