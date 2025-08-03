@@ -36,54 +36,6 @@
 
         }
         
-        #start-screen {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            text-align: center;
-            background-color: rgba(0, 0, 0, 0.7);
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
-            z-index: 10;
-        }
-
-        #start-screen h1 {
-            font-size: 2.5em;
-            margin-bottom: 20px;
-        }
-
-        #username-input {
-            padding: 10px;
-            border: 1px solid #555;
-            background-color: #333;
-            color: white;
-            border-radius: 5px;
-            font-size: 1em;
-            margin-bottom: 15px;
-            width: 200px;
-        }
-        
-        #play-button {
-            padding: 10px 20px;
-            font-size: 1.2em;
-            border: none;
-            background-color: #007BFF;
-            color: white;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: background-color 0.3s ease;
-        }
-
-        #play-button:hover {
-            background-color: #0056b3;
-        }
-
-        #game-container {
-            display: none;
-        }
-
         .chat-container {
             position: absolute;
             bottom: 10px;
@@ -122,186 +74,113 @@
 
 <body>
 
-    <div id="start-screen">
-        <h1>Growth Manhunt</h1>
-        <input type="text" id="username-input" placeholder="Enter your username">
-        <button id="play-button">Play</button>
-    </div>
-
-    <div id="game-container">
-        <canvas id="gameCanvas"></canvas>
+    <canvas id="gameCanvas"></canvas>
     
-        <div class="chat-container">
-            <input type="text" class="chat-input" placeholder="Press Enter to chat..." id="chatInput">
-        </div>
-
-        <div id="score-display">Score: 0</div>
+    <div class="chat-container">
+        <input type="text" class="chat-input" placeholder="Press Enter to chat..." id="chatInput">
     </div>
+
+    <div id="score-display">Score: 0</div>
+
 
     <script src="/socket.io/socket.io.js"></script>
 
     <script>
 
         const canvas = document.getElementById('gameCanvas');
-
         const ctx = canvas.getContext('2d');
-
         const socket = io();
-
         const chatInput = document.getElementById('chatInput');
         const scoreDisplay = document.getElementById('score-display');
-        const startScreen = document.getElementById('start-screen');
-        const gameContainer = document.getElementById('game-container');
-        const usernameInput = document.getElementById('username-input');
-        const playButton = document.getElementById('play-button');
-
 
         let playerId = null;
-
         let players = {};
-
         let bullets = {};
-
         let cubes = {};
-
         let pentagons = {};
-
         let triangles = {};
-
         let wall = {};
-
         let mapSize = {};
-
         let BARREL_LENGTH;
         let BARREL_WIDTH;
 
-
         const keys = { w: false, a: false, s: false, d: false };
-
         let mouse = { x: 0, y: 0 };
-
         let playerBarrelAngle = 0;
-
         let shooting = false;
-
-        let lastShotTime = 0; // Local shooting cooldown
-
-        const shootCooldown = 200; // Match server-side cooldown
-
+        let lastShotTime = 0; 
+        const shootCooldown = 200; 
 
         let camera = { x: 0, y: 0 };
 
         
         window.addEventListener('resize', () => {
-
             canvas.width = window.innerWidth;
-
             canvas.height = window.innerHeight;
-
             if (playerId && players[playerId]) {
-
                 const player = players[playerId];
-
                 camera.x = player.x - canvas.width / 2;
-
                 camera.y = player.y - canvas.height / 2;
-
             }
-
         });
 
-        playButton.addEventListener('click', () => {
-            const username = usernameInput.value.trim() || 'Unnamed';
-            socket.emit('setUsername', username);
-            startScreen.style.display = 'none';
-            gameContainer.style.display = 'block';
-            window.dispatchEvent(new Event('resize'));
-            animate();
-        });
+        window.dispatchEvent(new Event('resize'));
 
 
         socket.on('init', (data) => {
-
             playerId = data.playerId;
-
             players = data.players;
-
             bullets = data.bullets;
-
             cubes = data.cubes;
-
             pentagons = data.pentagons;
-
             triangles = data.triangles;
-
             wall = data.wall;
-
             mapSize = data.mapSize;
-
             BARREL_LENGTH = data.BARREL_LENGTH;
             BARREL_WIDTH = data.BARREL_WIDTH;
 
-
             if (players[playerId]) {
-
                 camera.x = players[playerId].x - canvas.width / 2;
-
                 camera.y = players[playerId].y - canvas.height / 2;
-
             }
-
         });
 
 
         socket.on('updatePlayers', (serverPlayers) => {
-
             players = serverPlayers;
             if (players[playerId]) {
                 scoreDisplay.textContent = `Score: ${Math.floor(players[playerId].score)}`;
             }
-
         });
 
 
         socket.on('updateBullets', (serverBullets) => {
-
             bullets = serverBullets;
-
         });
 
 
         socket.on('updateCubes', (serverCubes) => {
-
             cubes = serverCubes;
-
         });
 
 
         socket.on('updatePentagons', (serverPentagons) => {
-
             pentagons = serverPentagons;
-
         });
 
 
         socket.on('updateTriangles', (serverTriangles) => {
-
             triangles = serverTriangles;
-
         });
 
         
         socket.on('kill', () => {
-
-            // Redirect to index.html on kill
             window.location.reload();
-
         });
 
 
         document.addEventListener('keydown', (e) => {
             if (chatInput.matches(':focus')) {
-                // If chat is focused, don't move the player
                 if (e.key === 'Enter') {
                     const message = chatInput.value.trim();
                     if (message) {
@@ -314,18 +193,13 @@
             }
 
             if (e.key === 'w') keys.w = true;
-
             if (e.key === 'a') keys.a = true;
-
             if (e.key === 's') keys.s = true;
-
             if (e.key === 'd') keys.d = true;
-
             if (e.key === 't') {
                 e.preventDefault();
                 chatInput.focus();
             }
-
         });
 
 
@@ -335,44 +209,29 @@
             }
 
             if (e.key === 'w') keys.w = false;
-
             if (e.key === 'a') keys.a = false;
-
             if (e.key === 's') keys.s = false;
-
             if (e.key === 'd') keys.d = false;
-
         });
 
 
         canvas.addEventListener('mousemove', (e) => {
-
             mouse.x = e.clientX;
-
             mouse.y = e.clientY;
-
         });
 
 
         canvas.addEventListener('mousedown', (e) => {
-
             if (e.button === 0) {
-
                 shooting = true;
-
             }
-
         });
 
 
         canvas.addEventListener('mouseup', (e) => {
-
             if (e.button === 0) {
-
                 shooting = false;
-
             }
-
         });
 
         function drawBarrel(player) {
@@ -419,7 +278,7 @@
                     const messageY = messageYStart - (15 * (player.chatMessages.length - 1 - index));
                     const now = Date.now();
                     const age = now - msg.timestamp;
-                    const opacity = Math.max(0, 1 - age / 5000); // Fade out over 5 seconds
+                    const opacity = Math.max(0, 1 - age / 5000); 
                     ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
                     ctx.font = '12px sans-serif';
                     ctx.textAlign = 'center';
@@ -430,32 +289,20 @@
 
 
         function drawBullet(bullet) {
-
             ctx.fillStyle = 'white';
-
             ctx.beginPath();
-
             ctx.arc(bullet.x - camera.x, bullet.y - camera.y, bullet.radius, 0, Math.PI * 2);
-
             ctx.fill();
-
             ctx.closePath();
-
         }
 
 
         function drawCube(cube) {
-
             ctx.fillStyle = '#ffde59';
-
             ctx.beginPath();
-
             ctx.rect(cube.x - camera.x, cube.y - camera.y, cube.size, cube.size);
-
             ctx.fill();
-
             ctx.closePath();
-
         }
 
 
@@ -510,7 +357,7 @@
 
         function drawWall() {
             // Inner wall (pentagon spawn zone)
-            ctx.fillStyle = 'rgba(128, 0, 128, 0.2)'; // Semi-transparent purple
+            ctx.fillStyle = 'rgba(128, 0, 128, 0.2)';
             ctx.beginPath();
             ctx.rect(wall.x - camera.x, wall.y - camera.y, wall.width, wall.height);
             ctx.fill();
@@ -519,42 +366,25 @@
 
 
         function animate() {
-
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-
             if (playerId && players[playerId]) {
-
                 const player = players[playerId];
-
                 const lerpFactor = 0.1;
-
                 camera.x += (player.x - canvas.width / 2 - camera.x) * lerpFactor;
-
                 camera.y += (player.y - canvas.height / 2 - camera.y) * lerpFactor;
-
             }
-
 
             drawMap();
             drawWall();
-
             Object.values(cubes).forEach(drawCube);
-
             Object.values(pentagons).forEach(drawPentagon);
-
             Object.values(triangles).forEach(drawTriangle);
-
             Object.values(players).forEach(drawPlayer);
-
             Object.values(bullets).forEach(drawBullet);
-
             
-
-
             if (playerId && players[playerId]) {
                 const player = players[playerId];
-
                 if (!chatInput.matches(':focus')) {
                     const dx = mouse.x - (player.x - camera.x);
                     const dy = mouse.y - (player.y - camera.y);
@@ -566,28 +396,26 @@
                 }
 
                 const now = Date.now();
-
                 if (shooting && (now - lastShotTime > shootCooldown)) {
-
                     lastShotTime = now;
-
                     socket.emit('playerShoot');
-
                 }
-
             }
 
-            
             if (playerId) {
                 if (!chatInput.matches(':focus')) {
                     socket.emit('playerInput', keys);
                 }
             }
 
-
             requestAnimationFrame(animate);
-
         }
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const username = urlParams.get('username') || 'Unnamed';
+        socket.emit('setUsername', username);
+        
+        animate();
 
     </script>
 
