@@ -34,7 +34,7 @@ const PLAYER_SHOOT_COOLDOWN = 200; // in milliseconds
 const BULLET_STRENGTH = 10;
 const BULLET_SPEED = 10;
 const BULLET_RADIUS = 10;
-const CHAT_MESSAGE_LIFETIME = 5000; // 5 seconds for chat messages
+const CHAT_MESSAGE_LIFETIME = 6000; // 6 seconds for chat messages
 const BARREL_LENGTH = 30;
 const BARREL_WIDTH = 10;
 
@@ -292,11 +292,9 @@ function getPlayerSpawnPosition(playerRadius) {
         // Check collision with wall
         const tempPlayer = { x: x, y: y, radius: playerRadius };
         const playerRect = { x: tempPlayer.x - tempPlayer.radius, y: tempPlayer.y - tempPlayer.radius, width: tempPlayer.radius * 2, height: tempPlayer.radius * 2 };
-        if (rectRectColliding(playerRect, wall)) {
-            attempts++;
-            continue;
-        }
-
+        
+        // No collision with wall now, as per user request
+        
         spawnPosition = { x, y };
         attempts++;
     }
@@ -331,7 +329,7 @@ io.on('connection', (socket) => {
             friction: 0.85,
             maxSpeed: 4.5,
             hp: MAX_HP,
-            score: 0,
+            score: 26263, // Fixed: Score set to 26263
             keys: { w: false, a: false, s: false, d: false },
             lastDamageTime: 0,
             lastShotTime: 0,
@@ -443,30 +441,8 @@ setInterval(() => {
         let nextX = player.x + newVelocityX;
         let nextY = player.y + newVelocityY;
 
-        // Prevent player from entering the wall
-        const tempPlayer = { x: nextX, y: nextY, radius: player.radius };
-        const playerRect = { x: tempPlayer.x - tempPlayer.radius, y: tempPlayer.y - tempPlayer.radius, width: tempPlayer.radius * 2, height: tempPlayer.radius * 2 };
-        if (rectRectColliding(playerRect, wall)) {
-            // Player is colliding with the wall, so stop movement
-            // Find which side they hit and adjust
-            const overlapX = Math.min(playerRect.x + playerRect.width - wall.x, wall.x + wall.width - playerRect.x);
-            const overlapY = Math.min(playerRect.y + playerRect.height - wall.y, wall.y + wall.height - playerRect.y);
-            
-            if (overlapX < overlapY) {
-                if (playerRect.x < wall.x) { // hit from left
-                    nextX = wall.x - player.radius;
-                } else { // hit from right
-                    nextX = wall.x + wall.width + player.radius;
-                }
-            } else {
-                if (playerRect.y < wall.y) { // hit from top
-                    nextY = wall.y - player.radius;
-                } else { // hit from bottom
-                    nextY = wall.y + wall.height + player.radius;
-                }
-            }
-        }
-
+        // The central wall is now non-collidable, so we remove the collision check here.
+        
         player.x = Math.max(player.radius, Math.min(nextX, mapSize.width - player.radius));
         player.y = Math.max(player.radius, Math.min(nextY, mapSize.height - player.radius));
 
@@ -505,14 +481,7 @@ setInterval(() => {
                 bullet.velocity.y = 0;
             }
 
-            // Bullet-Wall collision
-            const bulletRect = { x: bullet.x - bullet.radius, y: bullet.y - bullet.radius, width: bullet.radius * 2, height: bullet.radius * 2 };
-            if (rectRectColliding(bulletRect, wall)) {
-                bullet.isFading = true;
-                bullet.fadeStartTime = now;
-                bullet.velocity.x = 0;
-                bullet.velocity.y = 0;
-            }
+            // The central wall is now non-collidable, so we remove the bullet collision check here.
 
             // Bullet-Player collision
             for (const playerId in players) {
