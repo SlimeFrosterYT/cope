@@ -290,7 +290,7 @@ function getPlayerSpawnPosition(playerRadius) {
         const y = Math.random() * (mapSize.height - playerRadius * 2) + playerRadius;
         
         // Check collision with wall
-        const tempPlayerCircle = { x: x, y: y, radius: playerRadius };
+        const tempPlayer = { x: x, y: y, radius: playerRadius };
         const playerRect = { x: tempPlayer.x - tempPlayer.radius, y: tempPlayer.y - tempPlayer.radius, width: tempPlayer.radius * 2, height: tempPlayer.radius * 2 };
         if (rectRectColliding(playerRect, wall)) {
             attempts++;
