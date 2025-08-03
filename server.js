@@ -28,7 +28,6 @@ const MAX_HP = 100;
 const HP_REGEN_DELAY = 20000;
 const HP_REGEN_RATE = 0.05;
 const CUBE_SCORE = 5;
-const PENTAGON_SCORE = 20;
 const TRIANGLE_SCORE = 15;
 const PLAYER_SHOOT_COOLDOWN = 200; // in milliseconds
 const BULLET_STRENGTH = 10;
@@ -37,6 +36,19 @@ const BULLET_RADIUS = 10;
 const CHAT_MESSAGE_LIFETIME = 6000; // 6 seconds for chat messages
 const BARREL_LENGTH = 25; // Adjusted length
 const BARREL_WIDTH = 12; // Adjusted width
+
+// New constants for different pentagon types
+const PENTAGON_SCORE_MIN = 300;
+const PENTAGON_SCORE_MAX = 600;
+const PENTAGON_HP = 50;
+const PENTAGON_COLOR = '#C71585'; // Pinkish-purple
+
+const LIGHT_BLUE_PENTAGON_SPAWN_CHANCE = 0.1; // 10%
+const LIGHT_BLUE_PENTAGON_SCORE_MIN = 5000;
+const LIGHT_BLUE_PENTAGON_SCORE_MAX = 10000;
+const LIGHT_BLUE_PENTAGON_HP = 100;
+const LIGHT_BLUE_PENTAGON_COLOR = '#ADD8E6';
+const MAX_LIGHT_BLUE_PENTAGONS = 1;
 
 // Define the larger map size as a square
 const mapSize = {
@@ -152,10 +164,14 @@ function spawnCube() {
     }
 }
 
-// Function to spawn a new purple pentagon inside the central square
+// Function to spawn a new pentagon
 function spawnPentagon() {
-    if (Object.keys(pentagons).length >= MAX_PENTAGONS) return;
+    const lightBluePentagonCount = Object.values(pentagons).filter(p => p.color === LIGHT_BLUE_PENTAGON_COLOR).length;
+    const isLightBlue = Math.random() < LIGHT_BLUE_PENTAGON_SPAWN_CHANCE && lightBluePentagonCount < MAX_LIGHT_BLUE_PENTAGONS;
     
+    if (!isLightBlue && Object.keys(pentagons).length >= MAX_PENTAGONS) return;
+    if (isLightBlue && lightBluePentagonCount >= MAX_LIGHT_BLUE_PENTAGONS) return;
+
     let attempts = 0;
     let newPentagonPos = null;
 
@@ -194,18 +210,35 @@ function spawnPentagon() {
     }
 
     if (newPentagonPos) {
-        pentagons[pentagonCounter] = {
-            id: pentagonCounter,
-            x: newPentagonPos.x,
-            y: newPentagonPos.y,
-            size: PENTAGON_SIZE,
-            strength: 50,
-            score: PENTAGON_SCORE,
-            width: PENTAGON_SIZE,
-            height: PENTAGON_SIZE,
-            hp: 50,
-            maxHp: 50
-        };
+        if (isLightBlue) {
+            pentagons[pentagonCounter] = {
+                id: pentagonCounter,
+                x: newPentagonPos.x,
+                y: newPentagonPos.y,
+                size: PENTAGON_SIZE,
+                color: LIGHT_BLUE_PENTAGON_COLOR,
+                strength: 50,
+                score: Math.floor(Math.random() * (LIGHT_BLUE_PENTAGON_SCORE_MAX - LIGHT_BLUE_PENTAGON_SCORE_MIN + 1)) + LIGHT_BLUE_PENTAGON_SCORE_MIN,
+                width: PENTAGON_SIZE,
+                height: PENTAGON_SIZE,
+                hp: LIGHT_BLUE_PENTAGON_HP,
+                maxHp: LIGHT_BLUE_PENTAGON_HP
+            };
+        } else {
+            pentagons[pentagonCounter] = {
+                id: pentagonCounter,
+                x: newPentagonPos.x,
+                y: newPentagonPos.y,
+                size: PENTAGON_SIZE,
+                color: PENTAGON_COLOR,
+                strength: 50,
+                score: Math.floor(Math.random() * (PENTAGON_SCORE_MAX - PENTAGON_SCORE_MIN + 1)) + PENTAGON_SCORE_MIN,
+                width: PENTAGON_SIZE,
+                height: PENTAGON_SIZE,
+                hp: PENTAGON_HP,
+                maxHp: PENTAGON_HP
+            };
+        }
         pentagonCounter++;
     }
 }
