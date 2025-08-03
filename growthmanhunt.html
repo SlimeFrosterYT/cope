@@ -41,7 +41,6 @@
             outline: none;
         }
 
-        /* Updated score display position */
         #score-display {
             position: absolute;
             bottom: 10px;
@@ -84,6 +83,7 @@
         const CHAT_FADE_DURATION = 500;
         const BASE_PLAYER_RADIUS = 25;
         const FADE_DURATION = 1000;
+        const BARREL_OFFSET = 5; // The amount the barrel is inside the player's body
 
         // Game state variables
         let playerId = null;
@@ -139,6 +139,12 @@
             BARREL_LENGTH = data.BARREL_LENGTH;
             BARREL_WIDTH = data.BARREL_WIDTH;
 
+            // Set initial radius for smooth growth animation
+            for (const id in players) {
+                players[id].currentRadius = players[id].radius;
+                players[id].targetRadius = players[id].radius;
+            }
+
             if (players[playerId]) {
                 camera.x = players[playerId].x - canvas.width / 2;
                 camera.y = players[playerId].y - canvas.height / 2;
@@ -150,7 +156,31 @@
          * Updates all player data from the server.
          */
         socket.on('updatePlayers', (serverPlayers) => {
-            players = serverPlayers;
+            for (const id in serverPlayers) {
+                if (players[id]) {
+                    // Update target radius for smooth growth
+                    players[id].targetRadius = serverPlayers[id].radius;
+                    players[id].x = serverPlayers[id].x;
+                    players[id].y = serverPlayers[id].y;
+                    players[id].barrelAngle = serverPlayers[id].barrelAngle;
+                    players[id].hp = serverPlayers[id].hp;
+                    players[id].score = serverPlayers[id].score;
+                    players[id].chatMessages = serverPlayers[id].chatMessages;
+                } else {
+                    // Add new player with initial radius
+                    serverPlayers[id].currentRadius = serverPlayers[id].radius;
+                    serverPlayers[id].targetRadius = serverPlayers[id].radius;
+                    players[id] = serverPlayers[id];
+                }
+            }
+
+            // Remove players that are no longer in the server data
+            for (const id in players) {
+                if (!serverPlayers[id]) {
+                    delete players[id];
+                }
+            }
+
             if (players[playerId]) {
                 scoreDisplay.textContent = `Score: ${Math.floor(players[playerId].score)}`;
             }
@@ -277,12 +307,13 @@
             
             ctx.fillStyle = '#555555';
             
-            const scaleFactor = player.radius / BASE_PLAYER_RADIUS;
+            const scaleFactor = player.currentRadius / BASE_PLAYER_RADIUS;
             const scaledBarrelLength = BARREL_LENGTH * scaleFactor;
             const scaledBarrelWidth = BARREL_WIDTH * scaleFactor;
+            const scaledBarrelOffset = BARREL_OFFSET * scaleFactor;
             
-            // Adjusted barrel position to be flush with the player's circle
-            ctx.fillRect(player.radius, -scaledBarrelWidth / 2, scaledBarrelLength, scaledBarrelWidth);
+            // Adjusted barrel position to be slightly inside the player's circle
+            ctx.fillRect(player.currentRadius - scaledBarrelOffset, -scaledBarrelWidth / 2, scaledBarrelLength, scaledBarrelWidth);
             ctx.restore();
         }
 
@@ -291,10 +322,15 @@
          * @param {object} player The player object to draw.
          */
         function drawPlayer(player) {
+            // Smoothly interpolate the player's radius
+            const lerpFactor = 0.1;
+            player.currentRadius = player.currentRadius + (player.targetRadius - player.currentRadius) * lerpFactor;
+            const displayRadius = player.currentRadius;
+
             // Draw player body
             ctx.fillStyle = player.socketId === playerId ? '#007bff' : '#dc3545';
             ctx.beginPath();
-            ctx.arc(player.x - camera.x, player.y - camera.y, player.radius, 0, Math.PI * 2);
+            ctx.arc(player.x - camera.x, player.y - camera.y, displayRadius, 0, Math.PI * 2);
             ctx.fill();
             ctx.closePath();
             
@@ -304,13 +340,13 @@
             ctx.fillStyle = 'white';
             ctx.font = '12px sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText(player.username, player.x - camera.x, player.y - camera.y - player.radius - 5);
+            ctx.fillText(player.username, player.x - camera.x, player.y - camera.y - displayRadius - 5);
 
             // Draw HP bar
-            const hpBarWidth = player.radius * 2;
+            const hpBarWidth = displayRadius * 2;
             const hpBarHeight = 5;
-            const hpBarX = player.x - camera.x - player.radius;
-            const hpBarY = player.y - camera.y + player.radius + 5;
+            const hpBarX = player.x - camera.x - displayRadius;
+            const hpBarY = player.y - camera.y + displayRadius + 5;
             ctx.fillStyle = 'red';
             ctx.fillRect(hpBarX, hpBarY, hpBarWidth, hpBarHeight);
             ctx.fillStyle = 'lime';
@@ -319,7 +355,7 @@
             
             // Draw chat messages with fade-out
             if (player.chatMessages && player.chatMessages.length > 0) {
-                const messageYStart = player.y - camera.y - player.radius - 20;
+                const messageYStart = player.y - camera.y - displayRadius - 20;
                 const now = Date.now();
                 player.chatMessages.forEach((msg, index) => {
                     const messageY = messageYStart - (15 * (player.chatMessages.length - 1 - index));
@@ -346,7 +382,8 @@
                 ctx.globalAlpha = opacity;
             }
             
-            ctx.fillStyle = 'white';
+            // Use the bullet's color property from the server
+            ctx.fillStyle = bullet.color; 
             ctx.beginPath();
             ctx.arc(bullet.x - camera.x, bullet.y - camera.y, bullet.radius, 0, Math.PI * 2);
             ctx.fill();
