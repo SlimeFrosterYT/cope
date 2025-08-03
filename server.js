@@ -289,11 +289,7 @@ function getPlayerSpawnPosition(playerRadius) {
         const x = Math.random() * (mapSize.width - playerRadius * 2) + playerRadius;
         const y = Math.random() * (mapSize.height - playerRadius * 2) + playerRadius;
         
-        // Check collision with wall
         const tempPlayer = { x: x, y: y, radius: playerRadius };
-        const playerRect = { x: tempPlayer.x - tempPlayer.radius, y: tempPlayer.y - tempPlayer.radius, width: tempPlayer.radius * 2, height: tempPlayer.radius * 2 };
-        
-        // No collision with wall now, as per user request
         
         spawnPosition = { x, y };
         attempts++;
@@ -329,11 +325,11 @@ io.on('connection', (socket) => {
             friction: 0.85,
             maxSpeed: 4.5,
             hp: MAX_HP,
-            score: 26263, // Fixed: Score set to 26263
+            score: 26263,
             keys: { w: false, a: false, s: false, d: false },
             lastDamageTime: 0,
             lastShotTime: 0,
-            chatMessages: [] // New array to store chat messages
+            chatMessages: []
         };
 
         socket.emit('init', { playerId: socket.id, players, bullets, cubes, pentagons, triangles, wall, mapSize, BARREL_LENGTH, BARREL_WIDTH });
@@ -370,7 +366,6 @@ io.on('connection', (socket) => {
         if (player && (now - player.lastShotTime > PLAYER_SHOOT_COOLDOWN)) {
             player.lastShotTime = now;
             
-            // The server calculates the bullet spawn position, not the client
             const spawnDistance = player.radius + player.bulletRadius + 5;
             const bulletSpawnX = player.x + Math.cos(player.barrelAngle) * spawnDistance;
             const bulletSpawnY = player.y + Math.sin(player.barrelAngle) * spawnDistance;
@@ -441,20 +436,16 @@ setInterval(() => {
         let nextX = player.x + newVelocityX;
         let nextY = player.y + newVelocityY;
 
-        // The central wall is now non-collidable, so we remove the collision check here.
-        
         player.x = Math.max(player.radius, Math.min(nextX, mapSize.width - player.radius));
         player.y = Math.max(player.radius, Math.min(nextY, mapSize.height - player.radius));
 
         player.velocity.x = newVelocityX;
         player.velocity.y = newVelocityY;
 
-        // New HP Regeneration logic
         if (player.hp < MAX_HP && (now - player.lastDamageTime > HP_REGEN_DELAY)) {
             player.hp = Math.min(player.hp + HP_REGEN_RATE, MAX_HP);
         }
 
-        // Remove old chat messages
         player.chatMessages = player.chatMessages.filter(msg => now - msg.timestamp < CHAT_MESSAGE_LIFETIME);
 
         if (player.hp <= 0) {
@@ -473,7 +464,6 @@ setInterval(() => {
             bullet.x += bullet.velocity.x;
             bullet.y += bullet.velocity.y;
 
-            // Bullet-Map Boundary collision
             if (bullet.x < 0 || bullet.x > mapSize.width || bullet.y < 0 || bullet.y > mapSize.height) {
                 bullet.isFading = true;
                 bullet.fadeStartTime = now;
@@ -481,9 +471,6 @@ setInterval(() => {
                 bullet.velocity.y = 0;
             }
 
-            // The central wall is now non-collidable, so we remove the bullet collision check here.
-
-            // Bullet-Player collision
             for (const playerId in players) {
                 const player = players[playerId];
                 if (bullet.ownerId === player.socketId) continue;
@@ -516,7 +503,6 @@ setInterval(() => {
                 }
             }
 
-            // Bullet-Cube collision
             for (const cubeId in cubes) {
                 const cube = cubes[cubeId];
                 const closestX = Math.max(cube.x, Math.min(bullet.x, cube.x + cube.size));
@@ -527,7 +513,6 @@ setInterval(() => {
                 const distSquaredToCube = (distToCubeX * distToCubeX) + (distToCubeY * distToCubeY);
                 
                 if (distSquaredToCube < (bullet.radius * bullet.radius)) {
-                    // Reduce bullet strength
                     bullet.strength -= cube.strength;
 
                     const killer = players[bullet.ownerId];
@@ -543,7 +528,6 @@ setInterval(() => {
                 }
             }
             
-            // Bullet-Pentagon collision
             for (const pentagonId in pentagons) {
                 const pentagon = pentagons[pentagonId];
                 const closestX = Math.max(pentagon.x, Math.min(bullet.x, pentagon.x + pentagon.size));
@@ -568,7 +552,6 @@ setInterval(() => {
                 }
             }
 
-            // Bullet-Triangle collision
             for (const triangleId in triangles) {
                 const triangle = triangles[triangleId];
                 const closestX = Math.max(triangle.x, Math.min(bullet.x, triangle.x + triangle.size));
