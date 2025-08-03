@@ -84,6 +84,7 @@
         const BASE_PLAYER_RADIUS = 25; // Base radius for new players
         const FADE_DURATION = 1000;
         const BARREL_OFFSET = 5; // The amount the barrel is inside the player's body
+        const MAX_HP = 100;
 
         // Game state variables
         let playerId = null;
@@ -306,7 +307,7 @@
             ctx.translate(player.x - camera.x, player.y - camera.y);
             ctx.rotate(player.barrelAngle);
             
-            ctx.fillStyle = player.color; // Fixed: Use player's color for the barrel
+            ctx.fillStyle = player.color; // Use player's color for the barrel
             
             const scaleFactor = player.currentRadius / BASE_PLAYER_RADIUS;
             const scaledBarrelLength = BARREL_LENGTH * scaleFactor;
@@ -343,16 +344,18 @@
             ctx.textAlign = 'center';
             ctx.fillText(player.username, player.x - camera.x, player.y - camera.y - displayRadius - 5);
 
-            // Draw HP bar
-            const hpBarWidth = displayRadius * 2;
-            const hpBarHeight = 5;
-            const hpBarX = player.x - camera.x - displayRadius;
-            const hpBarY = player.y - camera.y + displayRadius + 5;
-            ctx.fillStyle = 'red';
-            ctx.fillRect(hpBarX, hpBarY, hpBarWidth, hpBarHeight);
-            ctx.fillStyle = 'lime';
-            const healthPercentage = player.hp / MAX_HP;
-            ctx.fillRect(hpBarX, hpBarY, hpBarWidth * healthPercentage, hpBarHeight);
+            // Only draw HP bar if health is not full
+            if (player.hp < MAX_HP) {
+                const hpBarWidth = displayRadius * 2;
+                const hpBarHeight = 5;
+                const hpBarX = player.x - camera.x - displayRadius;
+                const hpBarY = player.y - camera.y + displayRadius + 5;
+                ctx.fillStyle = 'red';
+                ctx.fillRect(hpBarX, hpBarY, hpBarWidth, hpBarHeight);
+                ctx.fillStyle = 'lime';
+                const healthPercentage = player.hp / MAX_HP;
+                ctx.fillRect(hpBarX, hpBarY, hpBarWidth * healthPercentage, hpBarHeight);
+            }
             
             // Draw chat messages with fade-out
             if (player.chatMessages && player.chatMessages.length > 0) {
@@ -393,7 +396,7 @@
         }
 
         /**
-         * Draws a health bar for a shape if its health is below max.
+         * Draws a health bar for a shape only if its health is not full.
          * @param {object} shape The shape object.
          * @param {number} size The size of the shape.
          */
@@ -428,6 +431,7 @@
             ctx.rect(cube.x - camera.x, cube.y - camera.y, cube.size, cube.size);
             ctx.fill();
             ctx.closePath();
+            drawHealthBar(cube, cube.size);
         }
 
         /**
