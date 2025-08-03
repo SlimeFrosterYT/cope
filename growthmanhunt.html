@@ -107,14 +107,14 @@
         let wall = {};
         let mapSize = {};
         let BARREL_LENGTH;
-        let BARREL_WIDTH;
+        let BARREL_WIDTH; // This is now a dynamic value from the server
 
         const keys = { w: false, a: false, s: false, d: false };
         let mouse = { x: 0, y: 0 };
         let playerBarrelAngle = 0;
         let shooting = false;
         let lastShotTime = 0; 
-        const shootCooldown = 200; 
+        let shootCooldown; // This is now a dynamic value from the server
 
         let camera = { x: 0, y: 0 };
 
@@ -251,12 +251,11 @@
             ctx.rotate(player.barrelAngle);
             ctx.fillStyle = player.color;
             
-            // Fixed: Barrel size scales with player size
+            // Barrel size scales with player size and uses the width from the server
             const scaleFactor = player.radius / BASE_PLAYER_RADIUS;
             const scaledBarrelLength = BARREL_LENGTH * scaleFactor;
             const scaledBarrelWidth = BARREL_WIDTH * scaleFactor;
             
-            // Fixed: Barrel position is now slightly closer to the player
             ctx.fillRect(player.radius - 1, -scaledBarrelWidth / 2, scaledBarrelLength, scaledBarrelWidth);
             ctx.restore();
         }
@@ -479,8 +478,8 @@
                 }
 
                 const now = Date.now();
-                if (shooting && (now - lastShotTime > shootCooldown)) {
-                    lastShotTime = now;
+                // This is a client-side check, but the server handles the authoritative cooldown
+                if (shooting) {
                     socket.emit('playerShoot');
                 }
             }
@@ -495,7 +494,7 @@
         }
 
         const urlParams = new URLSearchParams(window.location.search);
-        const username = urlParams.get('username') || 'Unnamed';
+        const username = urlParams.get('username'); // Get username from URL
         socket.emit('setUsername', username);
         
         animate();
