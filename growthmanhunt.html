@@ -426,6 +426,10 @@
             const scaleX = minimapSize / mapSize.width;
             const scaleY = minimapSize / mapSize.height;
 
+            // Draw wall on minimap
+            ctx.fillStyle = 'rgba(128, 0, 128, 0.2)';
+            ctx.fillRect(minimapX + wall.x * scaleX, minimapY + wall.y * scaleY, wall.width * scaleX, wall.height * scaleY);
+
             // Draw players on minimap
             for (const id in players) {
                 const player = players[id];
