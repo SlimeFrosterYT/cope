@@ -92,6 +92,10 @@
         const socket = io();
         const chatInput = document.getElementById('chatInput');
         const scoreDisplay = document.getElementById('score-display');
+        
+        // Constants for chat message display
+        const CHAT_DISPLAY_TIME = 5000; // time in ms before fading starts
+        const CHAT_FADE_DURATION = 1000; // time in ms for the message to fade out
 
         let playerId = null;
         let players = {};
@@ -239,7 +243,8 @@
             ctx.translate(player.x - camera.x, player.y - camera.y);
             ctx.rotate(player.barrelAngle);
             ctx.fillStyle = player.color;
-            ctx.fillRect(player.radius - 5, -BARREL_WIDTH / 2, BARREL_LENGTH, BARREL_WIDTH);
+            // Fixed: Adjusted barrel to start at the edge of the player circle
+            ctx.fillRect(player.radius, -BARREL_WIDTH / 2, BARREL_LENGTH, BARREL_WIDTH);
             ctx.restore();
         }
 
@@ -278,11 +283,14 @@
                     const messageY = messageYStart - (15 * (player.chatMessages.length - 1 - index));
                     const now = Date.now();
                     const age = now - msg.timestamp;
-                    const opacity = Math.max(0, 1 - age / 5000); 
-                    ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
-                    ctx.font = '12px sans-serif';
-                    ctx.textAlign = 'center';
-                    ctx.fillText(msg.text, player.x - camera.x, messageY);
+                    // Fixed: Chat message fades after 5 seconds over a 1 second period
+                    const opacity = Math.max(0, 1 - Math.max(0, age - CHAT_DISPLAY_TIME) / CHAT_FADE_DURATION); 
+                    if (opacity > 0) {
+                        ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+                        ctx.font = '12px sans-serif';
+                        ctx.textAlign = 'center';
+                        ctx.fillText(msg.text, player.x - camera.x, messageY);
+                    }
                 });
             }
         }
@@ -346,8 +354,8 @@
 
 
         function drawMap() {
-            // Outer boundary
-            ctx.strokeStyle = '#555';
+            // Fixed: Changed map boundary color to be more visible
+            ctx.strokeStyle = '#aaa'; 
             ctx.lineWidth = 5;
             ctx.beginPath();
             ctx.rect(0 - camera.x, 0 - camera.y, mapSize.width, mapSize.height);
