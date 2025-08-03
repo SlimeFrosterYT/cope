@@ -32,13 +32,15 @@ const HP_REGEN_DELAY = 20000;
 const HP_REGEN_RATE = 0.05;
 const CUBE_SCORE = 5;
 const TRIANGLE_SCORE = 15;
-const PLAYER_SHOOT_COOLDOWN = 200; // in milliseconds
+// Updated: Bullet cooldown is now 0.5 seconds
+const PLAYER_SHOOT_COOLDOWN = 500; // in milliseconds
 const BULLET_STRENGTH = 10;
 const BULLET_SPEED = 10;
 const BULLET_RADIUS = 10;
 const CHAT_MESSAGE_LIFETIME = 6000; // 6 seconds for chat messages
 const BARREL_LENGTH = 25; // Adjusted length
-const BARREL_WIDTH = 12; // Adjusted width
+// Updated: Barrel width is now thicker
+const BARREL_WIDTH = 20; // Adjusted width to be thicker
 
 // New constants for different pentagon types
 const PENTAGON_SCORE_MIN = 300;
@@ -344,6 +346,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('setUsername', (username) => {
+        // Corrected: The player name is "Unnamed" if not provided
         const finalUsername = username ? username : "Unnamed";
 
         const playerRadius = 25;
