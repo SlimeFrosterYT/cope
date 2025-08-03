@@ -35,8 +35,8 @@ const BULLET_STRENGTH = 10;
 const BULLET_SPEED = 10;
 const BULLET_RADIUS = 10;
 const CHAT_MESSAGE_LIFETIME = 6000; // 6 seconds for chat messages
-const BARREL_LENGTH = 30;
-const BARREL_WIDTH = 10;
+const BARREL_LENGTH = 25; // Adjusted length
+const BARREL_WIDTH = 12; // Adjusted width
 
 // Define the larger map size as a square
 const mapSize = {
@@ -203,7 +203,8 @@ function spawnPentagon() {
             score: PENTAGON_SCORE,
             width: PENTAGON_SIZE,
             height: PENTAGON_SIZE,
-            hp: 50
+            hp: 50,
+            maxHp: 50
         };
         pentagonCounter++;
     }
@@ -270,7 +271,8 @@ function spawnTriangle() {
             score: TRIANGLE_SCORE,
             width: TRIANGLE_SIZE,
             height: TRIANGLE_SIZE,
-            hp: 15
+            hp: 15,
+            maxHp: 15
         };
         triangleCounter++;
     }
@@ -366,7 +368,7 @@ io.on('connection', (socket) => {
         if (player && (now - player.lastShotTime > PLAYER_SHOOT_COOLDOWN)) {
             player.lastShotTime = now;
             
-            const spawnDistance = player.radius + player.bulletRadius + 5;
+            const spawnDistance = player.radius + player.bulletRadius - 1; // Adjusted for barrel position
             const bulletSpawnX = player.x + Math.cos(player.barrelAngle) * spawnDistance;
             const bulletSpawnY = player.y + Math.sin(player.barrelAngle) * spawnDistance;
 
@@ -464,11 +466,9 @@ setInterval(() => {
             bullet.x += bullet.velocity.x;
             bullet.y += bullet.velocity.y;
 
+            // Instantly remove bullet when hitting map boundary
             if (bullet.x < 0 || bullet.x > mapSize.width || bullet.y < 0 || bullet.y > mapSize.height) {
-                bullet.isFading = true;
-                bullet.fadeStartTime = now;
-                bullet.velocity.x = 0;
-                bullet.velocity.y = 0;
+                bulletsToRemove.add(bulletId);
             }
 
             for (const playerId in players) {
