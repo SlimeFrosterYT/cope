@@ -11,7 +11,7 @@
             background-color: #010409;
             font-family: sans-serif;
             color: white;
-            position: relative; /* Added for positioning UI elements */
+            position: relative;
         }
 
         canvas {
@@ -41,10 +41,12 @@
             outline: none;
         }
 
+        /* Updated score display position */
         #score-display {
             position: absolute;
-            top: 10px;
-            left: 10px;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
             font-size: 1.5em;
             color: white;
             background-color: rgba(0, 0, 0, 0.5);
@@ -81,6 +83,7 @@
         const CHAT_DISPLAY_TIME = 6000;
         const CHAT_FADE_DURATION = 500;
         const BASE_PLAYER_RADIUS = 25;
+        const FADE_DURATION = 1000;
 
         // Game state variables
         let playerId = null;
@@ -278,7 +281,8 @@
             const scaledBarrelLength = BARREL_LENGTH * scaleFactor;
             const scaledBarrelWidth = BARREL_WIDTH * scaleFactor;
             
-            ctx.fillRect(player.radius - 5, -scaledBarrelWidth / 2, scaledBarrelLength, scaledBarrelWidth);
+            // Adjusted barrel position to be flush with the player's circle
+            ctx.fillRect(player.radius, -scaledBarrelWidth / 2, scaledBarrelLength, scaledBarrelWidth);
             ctx.restore();
         }
 
@@ -332,15 +336,23 @@
         }
 
         /**
-         * Draws a bullet.
+         * Draws a bullet with a potential fade-out effect.
          * @param {object} bullet The bullet object to draw.
          */
         function drawBullet(bullet) {
+            ctx.save();
+            if (bullet.isFading) {
+                const opacity = Math.max(0, 1 - (Date.now() - bullet.fadeStartTime) / FADE_DURATION);
+                ctx.globalAlpha = opacity;
+            }
+            
             ctx.fillStyle = 'white';
             ctx.beginPath();
             ctx.arc(bullet.x - camera.x, bullet.y - camera.y, bullet.radius, 0, Math.PI * 2);
             ctx.fill();
             ctx.closePath();
+            
+            ctx.restore();
         }
 
         /**
