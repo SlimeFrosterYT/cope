@@ -1,39 +1,23 @@
 <!DOCTYPE html>
-
 <html lang="en">
-
 <head>
-
     <meta charset="UTF-8">
-
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
     <title>Growth Manhunt</title>
-
     <style>
-
         body {
-
             margin: 0;
-
             overflow: hidden;
-
             background-color: #010409;
-
             font-family: sans-serif;
-
             color: white;
-
+            position: relative; /* Added for positioning UI elements */
         }
 
         canvas {
-
             display: block;
-
             width: 100vw;
-
             height: 100vh;
-
         }
         
         .chat-container {
@@ -66,14 +50,12 @@
             background-color: rgba(0, 0, 0, 0.5);
             padding: 5px 10px;
             border-radius: 5px;
+            z-index: 10;
         }
 
     </style>
-
 </head>
-
 <body>
-
     <canvas id="gameCanvas"></canvas>
     
     <div class="chat-container">
@@ -82,22 +64,25 @@
 
     <div id="score-display">Score: 0</div>
 
-
     <script src="/socket.io/socket.io.js"></script>
-
     <script>
-
+        // Get the canvas and its 2D rendering context
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
+        
+        // Connect to the Socket.IO server
         const socket = io();
+        
+        // Get references to the UI elements
         const chatInput = document.getElementById('chatInput');
         const scoreDisplay = document.getElementById('score-display');
         
-        // Constants for chat message display
-        const CHAT_DISPLAY_TIME = 6000; // time in ms before fading starts
-        const CHAT_FADE_DURATION = 500; // time in ms for the message to fade out
+        // Constants for chat and player rendering
+        const CHAT_DISPLAY_TIME = 6000;
+        const CHAT_FADE_DURATION = 500;
         const BASE_PLAYER_RADIUS = 25;
 
+        // Game state variables
         let playerId = null;
         let players = {};
         let bullets = {};
@@ -107,18 +92,20 @@
         let wall = {};
         let mapSize = {};
         let BARREL_LENGTH;
-        let BARREL_WIDTH; // This is now a dynamic value from the server
+        let BARREL_WIDTH;
 
+        // Player input state
         const keys = { w: false, a: false, s: false, d: false };
         let mouse = { x: 0, y: 0 };
         let playerBarrelAngle = 0;
         let shooting = false;
-        let lastShotTime = 0; 
-        let shootCooldown; // This is now a dynamic value from the server
 
+        // Camera for a top-down view
         let camera = { x: 0, y: 0 };
 
-        
+        /**
+         * Resizes the canvas to fit the window and updates the camera position.
+         */
         window.addEventListener('resize', () => {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
@@ -129,9 +116,14 @@
             }
         });
 
+        // Trigger a resize event on initial load to set the canvas size
         window.dispatchEvent(new Event('resize'));
 
+        // --- Socket.IO Event Handlers ---
 
+        /**
+         * Initializes the game state from the server.
+         */
         socket.on('init', (data) => {
             playerId = data.playerId;
             players = data.players;
@@ -148,9 +140,12 @@
                 camera.x = players[playerId].x - canvas.width / 2;
                 camera.y = players[playerId].y - canvas.height / 2;
             }
+            animate();
         });
 
-
+        /**
+         * Updates all player data from the server.
+         */
         socket.on('updatePlayers', (serverPlayers) => {
             players = serverPlayers;
             if (players[playerId]) {
@@ -158,39 +153,56 @@
             }
         });
 
-
+        /**
+         * Updates all bullet data from the server.
+         */
         socket.on('updateBullets', (serverBullets) => {
             bullets = serverBullets;
         });
 
-
+        /**
+         * Updates cube data from the server.
+         */
         socket.on('updateCubes', (serverCubes) => {
             cubes = serverCubes;
         });
 
-
+        /**
+         * Updates pentagon data from the server.
+         */
         socket.on('updatePentagons', (serverPentagons) => {
             pentagons = serverPentagons;
         });
 
-
+        /**
+         * Updates triangle data from the server.
+         */
         socket.on('updateTriangles', (serverTriangles) => {
             triangles = serverTriangles;
         });
-
         
+        /**
+         * Reconnects to the server upon player death.
+         */
         socket.on('kill', () => {
             window.location.reload();
         });
 
 
+        // --- Input Event Handlers ---
+
+        /**
+         * Handles keyboard key presses.
+         */
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !chatInput.matches(':focus')) {
+            // Toggle chat input focus with 'Enter' or 'T'
+            if (e.key === 'Enter' || e.key === 't') {
                 e.preventDefault();
                 chatInput.focus();
                 return;
             }
 
+            // Handle chat message sending
             if (chatInput.matches(':focus')) {
                 if (e.key === 'Enter') {
                     const message = chatInput.value.trim();
@@ -203,72 +215,85 @@
                 return;
             }
 
+            // Handle player movement input
             if (e.key === 'w') keys.w = true;
             if (e.key === 'a') keys.a = true;
             if (e.key === 's') keys.s = true;
             if (e.key === 'd') keys.d = true;
-            if (e.key === 't') {
-                e.preventDefault();
-                chatInput.focus();
-            }
         });
 
-
+        /**
+         * Handles keyboard key releases.
+         */
         document.addEventListener('keyup', (e) => {
             if (chatInput.matches(':focus')) {
                 return;
             }
-
             if (e.key === 'w') keys.w = false;
             if (e.key === 'a') keys.a = false;
             if (e.key === 's') keys.s = false;
             if (e.key === 'd') keys.d = false;
         });
 
-
+        /**
+         * Tracks mouse movement for aiming.
+         */
         canvas.addEventListener('mousemove', (e) => {
             mouse.x = e.clientX;
             mouse.y = e.clientY;
         });
 
-
+        /**
+         * Handles mouse button down for shooting.
+         */
         canvas.addEventListener('mousedown', (e) => {
-            if (e.button === 0) {
+            if (e.button === 0) { // Left mouse button
                 shooting = true;
             }
         });
 
-
+        /**
+         * Handles mouse button release to stop shooting.
+         */
         canvas.addEventListener('mouseup', (e) => {
             if (e.button === 0) {
                 shooting = false;
             }
         });
 
+        // --- Drawing Functions ---
+
+        /**
+         * Draws the player's cannon barrel.
+         * @param {object} player The player object to draw the barrel for.
+         */
         function drawBarrel(player) {
             ctx.save();
             ctx.translate(player.x - camera.x, player.y - camera.y);
             ctx.rotate(player.barrelAngle);
-            ctx.fillStyle = player.color;
             
-            // Barrel size scales with player size and uses the width from the server
+            ctx.fillStyle = '#555555';
+            
             const scaleFactor = player.radius / BASE_PLAYER_RADIUS;
             const scaledBarrelLength = BARREL_LENGTH * scaleFactor;
             const scaledBarrelWidth = BARREL_WIDTH * scaleFactor;
             
-            ctx.fillRect(player.radius - 1, -scaledBarrelWidth / 2, scaledBarrelLength, scaledBarrelWidth);
+            ctx.fillRect(player.radius - 5, -scaledBarrelWidth / 2, scaledBarrelLength, scaledBarrelWidth);
             ctx.restore();
         }
 
+        /**
+         * Draws a player circle, name, HP bar, and chat messages.
+         * @param {object} player The player object to draw.
+         */
         function drawPlayer(player) {
-            // Draw player circle
-            ctx.fillStyle = player.color;
+            // Draw player body
+            ctx.fillStyle = player.socketId === playerId ? '#007bff' : '#dc3545';
             ctx.beginPath();
             ctx.arc(player.x - camera.x, player.y - camera.y, player.radius, 0, Math.PI * 2);
             ctx.fill();
             ctx.closePath();
             
-            // Draw player barrel
             drawBarrel(player);
 
             // Draw player name
@@ -277,7 +302,7 @@
             ctx.textAlign = 'center';
             ctx.fillText(player.username, player.x - camera.x, player.y - camera.y - player.radius - 5);
 
-            // Draw player HP bar
+            // Draw HP bar
             const hpBarWidth = player.radius * 2;
             const hpBarHeight = 5;
             const hpBarX = player.x - camera.x - player.radius;
@@ -288,12 +313,12 @@
             const healthPercentage = player.hp / 100;
             ctx.fillRect(hpBarX, hpBarY, hpBarWidth * healthPercentage, hpBarHeight);
             
-            // Draw chat messages above the player's head
+            // Draw chat messages with fade-out
             if (player.chatMessages && player.chatMessages.length > 0) {
                 const messageYStart = player.y - camera.y - player.radius - 20;
+                const now = Date.now();
                 player.chatMessages.forEach((msg, index) => {
                     const messageY = messageYStart - (15 * (player.chatMessages.length - 1 - index));
-                    const now = Date.now();
                     const age = now - msg.timestamp;
                     const opacity = Math.max(0, 1 - Math.max(0, age - CHAT_DISPLAY_TIME) / CHAT_FADE_DURATION); 
                     if (opacity > 0) {
@@ -306,7 +331,10 @@
             }
         }
 
-
+        /**
+         * Draws a bullet.
+         * @param {object} bullet The bullet object to draw.
+         */
         function drawBullet(bullet) {
             ctx.fillStyle = 'white';
             ctx.beginPath();
@@ -315,9 +343,13 @@
             ctx.closePath();
         }
 
-        // Draws a rounded health bar
+        /**
+         * Draws a health bar for a shape if its health is below max.
+         * @param {object} shape The shape object.
+         * @param {number} size The size of the shape.
+         */
         function drawHealthBar(shape, size) {
-            if (shape.hp >= shape.maxHp) return; // Only draw if damaged
+            if (shape.hp >= shape.maxHp) return;
 
             const hpBarWidth = size;
             const hpBarHeight = 5;
@@ -326,19 +358,21 @@
             const healthPercentage = shape.hp / shape.maxHp;
             const borderRadius = 2;
 
-            // Draw red background with rounded corners
             ctx.fillStyle = 'red';
             ctx.beginPath();
             ctx.roundRect(hpBarX, hpBarY, hpBarWidth, hpBarHeight, borderRadius);
             ctx.fill();
 
-            // Draw green foreground with rounded corners
             ctx.fillStyle = 'lime';
             ctx.beginPath();
             ctx.roundRect(hpBarX, hpBarY, hpBarWidth * healthPercentage, hpBarHeight, borderRadius);
             ctx.fill();
         }
 
+        /**
+         * Draws a cube shape.
+         * @param {object} cube The cube object to draw.
+         */
         function drawCube(cube) {
             ctx.fillStyle = '#ffde59';
             ctx.beginPath();
@@ -347,16 +381,22 @@
             ctx.closePath();
         }
 
-
+        /**
+         * Draws a pentagon shape.
+         * @param {object} pentagon The pentagon object to draw.
+         */
         function drawPentagon(pentagon) {
-            ctx.fillStyle = pentagon.color; // Use the color from the object
+            ctx.fillStyle = pentagon.color;
             ctx.beginPath();
             const sides = 5;
             const size = pentagon.size / 2;
+            const centerX = pentagon.x - camera.x + pentagon.size / 2;
+            const centerY = pentagon.y - camera.y + pentagon.size / 2;
+            
             for (let i = 0; i < sides; i++) {
-                const angle = i * 2 * Math.PI / sides;
-                const x = pentagon.x - camera.x + size * Math.cos(angle) + pentagon.size / 2;
-                const y = pentagon.y - camera.y + size * Math.sin(angle) + pentagon.size / 2;
+                const angle = i * 2 * Math.PI / sides - Math.PI / 2; // Start from the top
+                const x = centerX + size * Math.cos(angle);
+                const y = centerY + size * Math.sin(angle);
                 if (i === 0) {
                     ctx.moveTo(x, y);
                 } else {
@@ -365,18 +405,25 @@
             }
             ctx.closePath();
             ctx.fill();
-            drawHealthBar(pentagon, pentagon.size); // Call health bar function
+            drawHealthBar(pentagon, pentagon.size);
         }
 
+        /**
+         * Draws a triangle shape.
+         * @param {object} triangle The triangle object to draw.
+         */
         function drawTriangle(triangle) {
             ctx.fillStyle = '#ff4d4d';
             ctx.beginPath();
             const sides = 3;
             const size = triangle.size / 2;
+            const centerX = triangle.x - camera.x + triangle.size / 2;
+            const centerY = triangle.y - camera.y + triangle.size / 2;
+            
             for (let i = 0; i < sides; i++) {
-                const angle = i * 2 * Math.PI / sides;
-                const x = triangle.x - camera.x + size * Math.cos(angle) + triangle.size / 2;
-                const y = triangle.y - camera.y + size * Math.sin(angle) + triangle.size / 2;
+                const angle = i * 2 * Math.PI / sides - Math.PI / 2; // Start from the top
+                const x = centerX + size * Math.cos(angle);
+                const y = centerY + size * Math.sin(angle);
                 if (i === 0) {
                     ctx.moveTo(x, y);
                 } else {
@@ -385,10 +432,12 @@
             }
             ctx.closePath();
             ctx.fill();
-            drawHealthBar(triangle, triangle.size); // Call health bar function
+            drawHealthBar(triangle, triangle.size);
         }
 
-
+        /**
+         * Draws the outer border of the game map.
+         */
         function drawMap() {
             ctx.strokeStyle = '#aaa'; 
             ctx.lineWidth = 5;
@@ -398,6 +447,9 @@
             ctx.closePath();
         }
         
+        /**
+         * Draws the central wall in the map.
+         */
         function drawWall() {
             ctx.fillStyle = 'rgba(128, 0, 128, 0.2)';
             ctx.beginPath();
@@ -406,6 +458,9 @@
             ctx.closePath();
         }
 
+        /**
+         * Draws a mini-map in the bottom-right corner.
+         */
         function drawMinimap() {
             if (!mapSize.width || !players[playerId]) return;
 
@@ -434,7 +489,7 @@
                 const player = players[id];
                 const playerMinimapX = minimapX + player.x * scaleX;
                 const playerMinimapY = minimapY + player.y * scaleY;
-                ctx.fillStyle = id === playerId ? 'white' : 'red';
+                ctx.fillStyle = id === playerId ? '#007bff' : '#dc3545';
                 ctx.beginPath();
                 ctx.arc(playerMinimapX, playerMinimapY, 3, 0, Math.PI * 2);
                 ctx.fill();
@@ -444,10 +499,13 @@
             ctx.restore();
         }
 
-
+        /**
+         * The main animation loop.
+         */
         function animate() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+            // Smoothly move the camera to follow the current player
             if (playerId && players[playerId]) {
                 const player = players[playerId];
                 const lerpFactor = 0.1;
@@ -455,6 +513,7 @@
                 camera.y += (player.y - canvas.height / 2 - camera.y) * lerpFactor;
             }
 
+            // Draw all game elements
             drawMap();
             drawWall();
             Object.values(cubes).forEach(drawCube);
@@ -465,9 +524,11 @@
             
             drawMinimap();
             
+            // Handle player input and shooting
             if (playerId && players[playerId]) {
                 const player = players[playerId];
                 if (!chatInput.matches(':focus')) {
+                    // Calculate and update the player's barrel angle based on mouse position
                     const dx = mouse.x - (player.x - camera.x);
                     const dy = mouse.y - (player.y - camera.y);
                     const newBarrelAngle = Math.atan2(dy, dx);
@@ -477,30 +538,33 @@
                     }
                 }
 
-                const now = Date.now();
-                // This is a client-side check, but the server handles the authoritative cooldown
+                // If shooting, emit a 'playerShoot' event to the server
                 if (shooting) {
                     socket.emit('playerShoot');
                 }
             }
 
+            // If a player exists, send their movement input to the server
             if (playerId) {
                 if (!chatInput.matches(':focus')) {
                     socket.emit('playerInput', keys);
                 }
             }
 
+            // Request the next animation frame
             requestAnimationFrame(animate);
         }
 
+        // Prompt for a username when the page loads
         const urlParams = new URLSearchParams(window.location.search);
-        const username = urlParams.get('username'); // Get username from URL
-        socket.emit('setUsername', username);
-        
-        animate();
+        const username = urlParams.get('username');
 
+        if (username) {
+            socket.emit('setUsername', username);
+        } else {
+            const newUsername = prompt("Please enter a username:");
+            socket.emit('setUsername', newUsername);
+        }
     </script>
-
 </body>
-
 </html>
