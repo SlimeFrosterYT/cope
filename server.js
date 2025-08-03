@@ -14,16 +14,19 @@ app.use(express.static(__dirname));
 const port = process.env.PORT || 3000;
 const FADE_DURATION = 1000;
 const BULLET_KNOCKBACK_FORCE = 0.5;
+const PLAYER_COLLISION_KNOCKBACK = 0.1;
+const SHAPE_COLLISION_KNOCKBACK = 0.05;
 const CUBE_SIZE = 20;
 const TRIANGLE_SIZE = 40;
 const PENTAGON_SIZE = 50;
-const MAX_CUBES = 10;
-const MAX_PENTAGONS = 3;
-const MAX_TRIANGLES = 5;
-const CUBE_SPAWN_INTERVAL = 5000;
-const PENTAGON_SPAWN_INTERVAL = 8000;
-const TRIANGLE_SPAWN_INTERVAL = 6000;
-const PLAYER_COLLISION_DAMAGE = 1;
+const MAX_CUBES = 20;
+const MAX_PENTAGONS = 6;
+const MAX_TRIANGLES = 10;
+const CUBE_SPAWN_INTERVAL = 3000;
+const PENTAGON_SPAWN_INTERVAL = 5000;
+const TRIANGLE_SPAWN_INTERVAL = 4000;
+const PLAYER_COLLISION_DAMAGE = 0.5;
+const SHAPE_COLLISION_DAMAGE = 1;
 const MAX_HP = 100;
 const HP_REGEN_DELAY = 20000;
 const HP_REGEN_RATE = 0.05;
@@ -48,20 +51,20 @@ const LIGHT_BLUE_PENTAGON_SCORE_MIN = 5000;
 const LIGHT_BLUE_PENTAGON_SCORE_MAX = 10000;
 const LIGHT_BLUE_PENTAGON_HP = 100;
 const LIGHT_BLUE_PENTAGON_COLOR = '#ADD8E6';
-const MAX_LIGHT_BLUE_PENTAGONS = 1;
+const MAX_LIGHT_BLUE_PENTAGONS = 2;
 
 // Define the larger map size as a square
 const mapSize = {
-    width: 4000,
-    height: 4000
+    width: 6000,
+    height: 6000
 };
 
 // Define the central wall (now a special spawn zone)
 const wall = {
-    x: mapSize.width / 2 - 400,
-    y: mapSize.height / 2 - 400,
-    width: 800,
-    height: 800,
+    x: mapSize.width / 2 - 600,
+    y: mapSize.height / 2 - 600,
+    width: 1200,
+    height: 1200,
 };
 
 const players = {};
@@ -360,7 +363,7 @@ io.on('connection', (socket) => {
             friction: 0.85,
             maxSpeed: 4.5,
             hp: MAX_HP,
-            score: 26263,
+            score: 0, // Resetting starting score to 0
             keys: { w: false, a: false, s: false, d: false },
             lastDamageTime: 0,
             lastShotTime: 0,
@@ -428,7 +431,7 @@ setInterval(() => {
     const now = Date.now();
     const bulletsToRemove = new Set();
 
-    // Player collision logic
+    // Player-Player collision logic
     const playerIds = Object.keys(players);
     for (let i = 0; i < playerIds.length; i++) {
         for (let j = i + 1; j < playerIds.length; j++) {
@@ -440,12 +443,105 @@ setInterval(() => {
             const dx = player1.x - player2.x;
             const dy = player1.y - player2.y;
             const distance = Math.sqrt(dx * dx + dy * dy);
+            const minDistance = player1.radius + player2.radius;
 
-            if (distance < player1.radius + player2.radius) {
+            if (distance < minDistance) {
+                // Damage and knockback
                 player1.hp -= PLAYER_COLLISION_DAMAGE;
                 player1.lastDamageTime = now;
                 player2.hp -= PLAYER_COLLISION_DAMAGE;
                 player2.lastDamageTime = now;
+                
+                const angle = Math.atan2(dy, dx);
+                const overlap = minDistance - distance;
+                
+                player1.x += Math.cos(angle) * (overlap / 2);
+                player1.y += Math.sin(angle) * (overlap / 2);
+                player2.x -= Math.cos(angle) * (overlap / 2);
+                player2.y -= Math.sin(angle) * (overlap / 2);
+
+                player1.velocity.x += Math.cos(angle) * PLAYER_COLLISION_KNOCKBACK;
+                player1.velocity.y += Math.sin(angle) * PLAYER_COLLISION_KNOCKBACK;
+                player2.velocity.x -= Math.cos(angle) * PLAYER_COLLISION_KNOCKBACK;
+                player2.velocity.y -= Math.sin(angle) * PLAYER_COLLISION_KNOCKBACK;
+            }
+        }
+    }
+
+    // Player-Shape collision logic
+    for (const id in players) {
+        const player = players[id];
+        if (!player) continue;
+
+        // Cubes
+        for (const cubeId in cubes) {
+            const cube = cubes[cubeId];
+            const distToCubeX = player.x - (cube.x + cube.size / 2);
+            const distToCubeY = player.y - (cube.y + cube.size / 2);
+            const distance = Math.sqrt(distToCubeX * distToCubeX + distToCubeY * distToCubeY);
+            const minDistance = player.radius + cube.size / 2;
+            
+            if (distance < minDistance) {
+                player.hp -= SHAPE_COLLISION_DAMAGE;
+                player.lastDamageTime = now;
+                player.score += cube.score;
+                
+                const angle = Math.atan2(distToCubeY, distToCubeX);
+                const overlap = minDistance - distance;
+                
+                player.x += Math.cos(angle) * overlap;
+                player.y += Math.sin(angle) * overlap;
+                
+                player.velocity.x += Math.cos(angle) * SHAPE_COLLISION_KNOCKBACK;
+                player.velocity.y += Math.sin(angle) * SHAPE_COLLISION_KNOCKBACK;
+            }
+        }
+        
+        // Pentagons
+        for (const pentagonId in pentagons) {
+            const pentagon = pentagons[pentagonId];
+            const distToPentagonX = player.x - (pentagon.x + pentagon.size / 2);
+            const distToPentagonY = player.y - (pentagon.y + pentagon.size / 2);
+            const distance = Math.sqrt(distToPentagonX * distToPentagonX + distToPentagonY * distToPentagonY);
+            const minDistance = player.radius + pentagon.size / 2;
+            
+            if (distance < minDistance) {
+                player.hp -= SHAPE_COLLISION_DAMAGE;
+                player.lastDamageTime = now;
+                player.score += pentagon.score;
+                
+                const angle = Math.atan2(distToPentagonY, distToPentagonX);
+                const overlap = minDistance - distance;
+                
+                player.x += Math.cos(angle) * overlap;
+                player.y += Math.sin(angle) * overlap;
+                
+                player.velocity.x += Math.cos(angle) * SHAPE_COLLISION_KNOCKBACK;
+                player.velocity.y += Math.sin(angle) * SHAPE_COLLISION_KNOCKBACK;
+            }
+        }
+        
+        // Triangles
+        for (const triangleId in triangles) {
+            const triangle = triangles[triangleId];
+            const distToTriangleX = player.x - (triangle.x + triangle.size / 2);
+            const distToTriangleY = player.y - (triangle.y + triangle.size / 2);
+            const distance = Math.sqrt(distToTriangleX * distToTriangleX + distToTriangleY * distToTriangleY);
+            const minDistance = player.radius + triangle.size / 2;
+            
+            if (distance < minDistance) {
+                player.hp -= SHAPE_COLLISION_DAMAGE;
+                player.lastDamageTime = now;
+                player.score += triangle.score;
+                
+                const angle = Math.atan2(distToTriangleY, distToTriangleX);
+                const overlap = minDistance - distance;
+                
+                player.x += Math.cos(angle) * overlap;
+                player.y += Math.sin(angle) * overlap;
+                
+                player.velocity.x += Math.cos(angle) * SHAPE_COLLISION_KNOCKBACK;
+                player.velocity.y += Math.sin(angle) * SHAPE_COLLISION_KNOCKBACK;
             }
         }
     }
