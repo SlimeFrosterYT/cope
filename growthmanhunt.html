@@ -94,8 +94,9 @@
         const scoreDisplay = document.getElementById('score-display');
         
         // Constants for chat message display
-        const CHAT_DISPLAY_TIME = 5000; // time in ms before fading starts
-        const CHAT_FADE_DURATION = 1000; // time in ms for the message to fade out
+        const CHAT_DISPLAY_TIME = 6000; // time in ms before fading starts
+        const CHAT_FADE_DURATION = 500; // time in ms for the message to fade out
+        const BASE_PLAYER_RADIUS = 25;
 
         let playerId = null;
         let players = {};
@@ -184,6 +185,12 @@
 
 
         document.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !chatInput.matches(':focus')) {
+                e.preventDefault();
+                chatInput.focus();
+                return;
+            }
+
             if (chatInput.matches(':focus')) {
                 if (e.key === 'Enter') {
                     const message = chatInput.value.trim();
@@ -243,8 +250,12 @@
             ctx.translate(player.x - camera.x, player.y - camera.y);
             ctx.rotate(player.barrelAngle);
             ctx.fillStyle = player.color;
-            // Fixed: Adjusted barrel to start at the edge of the player circle
-            ctx.fillRect(player.radius, -BARREL_WIDTH / 2, BARREL_LENGTH, BARREL_WIDTH);
+            
+            // Fixed: Barrel size scales with player size
+            const scaleFactor = player.radius / BASE_PLAYER_RADIUS;
+            const scaledBarrelLength = BARREL_LENGTH * scaleFactor;
+            const scaledBarrelWidth = BARREL_WIDTH * scaleFactor;
+            ctx.fillRect(player.radius, -scaledBarrelWidth / 2, scaledBarrelLength, scaledBarrelWidth);
             ctx.restore();
         }
 
@@ -283,7 +294,7 @@
                     const messageY = messageYStart - (15 * (player.chatMessages.length - 1 - index));
                     const now = Date.now();
                     const age = now - msg.timestamp;
-                    // Fixed: Chat message fades after 5 seconds over a 1 second period
+                    // Fixed: Chat message stays at 100% opacity for 6s, then fades
                     const opacity = Math.max(0, 1 - Math.max(0, age - CHAT_DISPLAY_TIME) / CHAT_FADE_DURATION); 
                     if (opacity > 0) {
                         ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
@@ -354,7 +365,6 @@
 
 
         function drawMap() {
-            // Fixed: Changed map boundary color to be more visible
             ctx.strokeStyle = '#aaa'; 
             ctx.lineWidth = 5;
             ctx.beginPath();
@@ -362,14 +372,58 @@
             ctx.stroke();
             ctx.closePath();
         }
-
+        
         function drawWall() {
-            // Inner wall (pentagon spawn zone)
             ctx.fillStyle = 'rgba(128, 0, 128, 0.2)';
             ctx.beginPath();
             ctx.rect(wall.x - camera.x, wall.y - camera.y, wall.width, wall.height);
             ctx.fill();
             ctx.closePath();
+        }
+
+        function drawMinimap() {
+            if (!mapSize.width || !players[playerId]) return;
+
+            const minimapSize = 150;
+            const minimapPadding = 10;
+            const minimapX = canvas.width - minimapSize - minimapPadding;
+            const minimapY = canvas.height - minimapSize - minimapPadding;
+            
+            ctx.save();
+            ctx.globalAlpha = 0.8;
+            ctx.fillStyle = '#0a0a0a';
+            ctx.fillRect(minimapX, minimapY, minimapSize, minimapSize);
+            ctx.strokeStyle = '#aaa';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(minimapX, minimapY, minimapSize, minimapSize);
+
+            const scaleX = minimapSize / mapSize.width;
+            const scaleY = minimapSize / mapSize.height;
+
+            // Draw player on minimap
+            const player = players[playerId];
+            const playerMinimapX = minimapX + player.x * scaleX;
+            const playerMinimapY = minimapY + player.y * scaleY;
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(playerMinimapX, playerMinimapY, 3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.closePath();
+
+            // Draw other players on minimap
+            for (const id in players) {
+                if (id === playerId) continue;
+                const otherPlayer = players[id];
+                const otherPlayerMinimapX = minimapX + otherPlayer.x * scaleX;
+                const otherPlayerMinimapY = minimapY + otherPlayer.y * scaleY;
+                ctx.fillStyle = 'red';
+                ctx.beginPath();
+                ctx.arc(otherPlayerMinimapX, otherPlayerMinimapY, 3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.closePath();
+            }
+
+            ctx.restore();
         }
 
 
@@ -390,6 +444,8 @@
             Object.values(triangles).forEach(drawTriangle);
             Object.values(players).forEach(drawPlayer);
             Object.values(bullets).forEach(drawBullet);
+            
+            drawMinimap();
             
             if (playerId && players[playerId]) {
                 const player = players[playerId];
