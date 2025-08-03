@@ -255,7 +255,9 @@
             const scaleFactor = player.radius / BASE_PLAYER_RADIUS;
             const scaledBarrelLength = BARREL_LENGTH * scaleFactor;
             const scaledBarrelWidth = BARREL_WIDTH * scaleFactor;
-            ctx.fillRect(player.radius, -scaledBarrelWidth / 2, scaledBarrelLength, scaledBarrelWidth);
+            
+            // Fixed: Barrel position is now slightly closer to the player
+            ctx.fillRect(player.radius - 1, -scaledBarrelWidth / 2, scaledBarrelLength, scaledBarrelWidth);
             ctx.restore();
         }
 
@@ -294,7 +296,6 @@
                     const messageY = messageYStart - (15 * (player.chatMessages.length - 1 - index));
                     const now = Date.now();
                     const age = now - msg.timestamp;
-                    // Fixed: Chat message stays at 100% opacity for 6s, then fades
                     const opacity = Math.max(0, 1 - Math.max(0, age - CHAT_DISPLAY_TIME) / CHAT_FADE_DURATION); 
                     if (opacity > 0) {
                         ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
@@ -315,6 +316,29 @@
             ctx.closePath();
         }
 
+        // Draws a rounded health bar
+        function drawHealthBar(shape, size) {
+            if (shape.hp >= shape.maxHp) return; // Only draw if damaged
+
+            const hpBarWidth = size;
+            const hpBarHeight = 5;
+            const hpBarX = shape.x - camera.x;
+            const hpBarY = shape.y - camera.y + size + 5;
+            const healthPercentage = shape.hp / shape.maxHp;
+            const borderRadius = 2;
+
+            // Draw red background with rounded corners
+            ctx.fillStyle = 'red';
+            ctx.beginPath();
+            ctx.roundRect(hpBarX, hpBarY, hpBarWidth, hpBarHeight, borderRadius);
+            ctx.fill();
+
+            // Draw green foreground with rounded corners
+            ctx.fillStyle = 'lime';
+            ctx.beginPath();
+            ctx.roundRect(hpBarX, hpBarY, hpBarWidth * healthPercentage, hpBarHeight, borderRadius);
+            ctx.fill();
+        }
 
         function drawCube(cube) {
             ctx.fillStyle = '#ffde59';
@@ -342,6 +366,7 @@
             }
             ctx.closePath();
             ctx.fill();
+            drawHealthBar(pentagon, pentagon.size); // Call health bar function
         }
 
         function drawTriangle(triangle) {
@@ -361,6 +386,7 @@
             }
             ctx.closePath();
             ctx.fill();
+            drawHealthBar(triangle, triangle.size); // Call health bar function
         }
 
 
@@ -400,25 +426,14 @@
             const scaleX = minimapSize / mapSize.width;
             const scaleY = minimapSize / mapSize.height;
 
-            // Draw player on minimap
-            const player = players[playerId];
-            const playerMinimapX = minimapX + player.x * scaleX;
-            const playerMinimapY = minimapY + player.y * scaleY;
-            ctx.fillStyle = 'white';
-            ctx.beginPath();
-            ctx.arc(playerMinimapX, playerMinimapY, 3, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.closePath();
-
-            // Draw other players on minimap
+            // Draw players on minimap
             for (const id in players) {
-                if (id === playerId) continue;
-                const otherPlayer = players[id];
-                const otherPlayerMinimapX = minimapX + otherPlayer.x * scaleX;
-                const otherPlayerMinimapY = minimapY + otherPlayer.y * scaleY;
-                ctx.fillStyle = 'red';
+                const player = players[id];
+                const playerMinimapX = minimapX + player.x * scaleX;
+                const playerMinimapY = minimapY + player.y * scaleY;
+                ctx.fillStyle = id === playerId ? 'white' : 'red';
                 ctx.beginPath();
-                ctx.arc(otherPlayerMinimapX, otherPlayerMinimapY, 3, 0, Math.PI * 2);
+                ctx.arc(playerMinimapX, playerMinimapY, 3, 0, Math.PI * 2);
                 ctx.fill();
                 ctx.closePath();
             }
