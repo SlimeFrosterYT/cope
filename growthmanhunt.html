@@ -350,7 +350,7 @@
 
 
         function drawPentagon(pentagon) {
-            ctx.fillStyle = '#800080';
+            ctx.fillStyle = pentagon.color; // Use the color from the object
             ctx.beginPath();
             const sides = 5;
             const size = pentagon.size / 2;
