@@ -11,7 +11,7 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
+            height: 20vh;
             margin: 0;
             flex-direction: column;
             color: #d8d8d8;
@@ -46,11 +46,6 @@
             transition: all 0.2s;
         }
 
-        a:hover {
-            background-color: #d8d8d8;
-            color: #000000;
-        }
-
         .background-lines {
             position: fixed;
             top: 0;
@@ -64,13 +59,90 @@
             background-size: 25px 25px;
         }
     </style>
+<style>
+  /* Disable text selection for everything */
+  * {
+    user-select: none;          /* standard */
+    -webkit-user-select: none;  /* Chrome/Safari */
+    -moz-user-select: none;     /* Firefox */
+    -ms-user-select: none;      /* IE/Edge */
+  }
+
+#server-list{
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE 10+ */
+}
+
+#server-list::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+</style>
 </head>
 <body>
     <div class="background-lines"></div>
-    <h1>COPE</h1>
-    <input type="text" id="username-input" placeholder="Enter your username">
-    <a href="#" id="play-button">PLAY</a>
+    <h1 style="position: absolute; top: 0px;">COPE</h1>
+    <div class="menu" style="position: absolute; height: 300px; width: 800px; background-color: #0d0d0d; top: 106px;">
+<a class="ad" 
+   style="position: absolute; left: 6px; bottom: 10px; width: 166px; height: 268px; 
+          border: 1px solid white; display: flex; 
+          justify-content: center; align-items: center; text-align: center;">
+  ADVERTISEMENT
+</a>
+        <h1 href="#" style="position: absolute; right: -30px; top: 0px; width: 300px; text-align: center; font-weight: bold; font-size: 20px;">CHANGELOGS</h1>
+        <hr style="height: 1px; width: 206px; background-color: darkslategray; position: absolute; right: 16px; top: 33px; border: none;">
+        <h1 href="#" style="position: absolute; right: -30px; top: 36px; width: 300px; text-align: center; font-weight: 400; font-size: 13px; letter-spacing: 0.5px;">• Website created</h1>
+<div id="server-list" 
+     style="width: 340px; height: 190px; overflow-y: scroll; 
+            background-color: #0d0d0d; color: gray; 
+            position: absolute; left: 220px; border: 1px solid white; 
+            text-align: center; font-weight: bold;">
+  <div class="server-line">US WEST   Growth Manhunt Maze   0/80</div>
+  <!--<div class="server-line">US WEST   Growth Siege Blitz (SOON!)   0/80</div>-->
+  <!--<div class="server-line">US EAST   Another Server   12/80</div>-->
+</div>
 
+        <input type="text" id="username-input" placeholder="This is the tale of" style="position: absolute; left: 220px; bottom: 40px; width: 320px;">
+        <a href="#" id="play-button" style="position: absolute; left: 220px; bottom: 10px; width: 300px; text-align: center; font-weight: bold;">PLAY</a>
+    </div>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
     <script>
         document.getElementById('play-button').addEventListener('click', (e) => {
             const usernameInput = document.getElementById('username-input');
@@ -79,5 +151,31 @@
             playButton.href = `growthmanhunt.html?username=${encodeURIComponent(username)}`;
         });
     </script>
+<style>
+  .server-line {
+    padding: 5px;
+    cursor: pointer;
+  }
+
+  .server-line:hover {
+    background-color: #222; /* optional hover effect */
+  }
+
+  .server-line.selected {
+    color: lime;
+  }
+</style>
+
+<script>
+  const lines = document.querySelectorAll('.server-line');
+  lines.forEach(line => {
+    line.addEventListener('click', () => {
+      // Remove 'selected' from all lines
+      lines.forEach(l => l.classList.remove('selected'));
+      // Add 'selected' to clicked line
+      line.classList.add('selected');
+    });
+  });
+</script>
 </body>
 </html>
